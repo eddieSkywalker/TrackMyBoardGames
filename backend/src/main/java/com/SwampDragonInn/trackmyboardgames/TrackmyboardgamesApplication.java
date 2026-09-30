@@ -1,0 +1,13 @@
+package com.SwampDragonInn.trackmyboardgames;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class TrackmyboardgamesApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(TrackmyboardgamesApplication.class, args);
+	}
+
+}
