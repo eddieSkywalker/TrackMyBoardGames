@@ -238,6 +238,34 @@ a:focus-visible {
   font-size: 15px;
 }
 
+.api-check {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.api-check .auth-button {
+  width: auto;
+  min-width: 220px;
+  padding-inline: 20px;
+}
+
+.api-result,
+.api-error {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.api-result {
+  color: #286344;
+}
+
+.api-error {
+  color: #9a352b;
+}
+
 @media (max-width: 720px) {
   .auth-layout {
     grid-template-columns: 1fr;
