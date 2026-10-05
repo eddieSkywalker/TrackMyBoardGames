@@ -1,0 +1,33 @@
+{
+    "editor.insertSpaces": true,
+    "editor.tabSize": 4,
+    "editor.detectIndentation": false,
+    "editor.formatOnSave": true,
+    "[javascript]": {
+        "editor.defaultFormatter": "vscode.typescript-language-features",
+        "editor.insertSpaces": true,
+        "editor.tabSize": 4
+    },
+    "[javascriptreact]": {
+        "editor.defaultFormatter": "vscode.typescript-language-features",
+        "editor.insertSpaces": true,
+        "editor.tabSize": 4
+    },
+    "[typescript]": {
+        "editor.defaultFormatter": "vscode.typescript-language-features",
+        "editor.insertSpaces": true,
+        "editor.tabSize": 4
+    },
+    "[typescriptreact]": {
+        "editor.defaultFormatter": "vscode.typescript-language-features",
+        "editor.insertSpaces": true,
+        "editor.tabSize": 4
+    },
+    "js/ts.format.placeOpenBraceOnNewLineForFunctions": true,
+    "js/ts.format.placeOpenBraceOnNewLineForControlBlocks": true,
+    "css.format.braceStyle": "expand",
+    "scss.format.braceStyle": "expand",
+    "less.format.braceStyle": "expand",
+    "java.format.settings.url": "${workspaceFolder}/.vscode/java-formatter.xml",
+    "java.format.settings.profile": "TrackMyBoardGames Allman"
+}

@@ -32,50 +32,49 @@ import jakarta.validation.Valid;
 public class BoardGameController
 {
 
-	private final BoardGameService boardGameService;
+    private final BoardGameService boardGameService;
 
-	public BoardGameController(BoardGameService boardGameService)
-	{
-		this.boardGameService = boardGameService;
-	}
+    public BoardGameController(BoardGameService boardGameService)
+    {
+        this.boardGameService = boardGameService;
+    }
 
-	// List only the signed-in user's games, with an optional name search.
-	@GetMapping
-	public List<BoardGameResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) String search)
-	{
-		return this.boardGameService.findAll(jwt.getIssuer().toString(), jwt.getSubject(), search);
-	}
+    // List only the signed-in user's games, with an optional name search.
+    @GetMapping
+    public List<BoardGameResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) String search)
+    {
+        return this.boardGameService.findAll(jwt.getIssuer().toString(), jwt.getSubject(), search);
+    }
 
-	// Get one game only if it belongs to the signed-in user.
-	@GetMapping("/{gameId}")
-	public BoardGameResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID gameId)
-	{
-		return this.boardGameService.findById(jwt.getIssuer().toString(), jwt.getSubject(), gameId);
-	}
+    // Get one game only if it belongs to the signed-in user.
+    @GetMapping("/{gameId}")
+    public BoardGameResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID gameId)
+    {
+        return this.boardGameService.findById(jwt.getIssuer().toString(), jwt.getSubject(), gameId);
+    }
 
-	// Create a game owned by the signed-in user and return its new URL.
-	@PostMapping
-	public ResponseEntity<BoardGameResponse> create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody BoardGameRequest request)
-	{
-		BoardGameResponse game = this.boardGameService.create(jwt.getIssuer().toString(), jwt.getSubject(), request);
-		return ResponseEntity.created(URI.create("/api/games/" + game.id())).body(game);
-	}
+    // Create a game owned by the signed-in user and return its new URL.
+    @PostMapping
+    public ResponseEntity<BoardGameResponse> create(@AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody BoardGameRequest request)
+    {
+        BoardGameResponse game = this.boardGameService.create(jwt.getIssuer().toString(), jwt.getSubject(), request);
+        return ResponseEntity.created(URI.create("/api/games/" + game.id())).body(game);
+    }
 
-	// Replace a game’s details, but only when it belongs to the signed-in user.
-	@PutMapping("/{gameId}")
-	public BoardGameResponse update(
-		@AuthenticationPrincipal Jwt jwt,
-		@PathVariable UUID gameId,
-		@Valid @RequestBody BoardGameRequest request)
-	{
-		return this.boardGameService.update(jwt.getIssuer().toString(), jwt.getSubject(), gameId, request);
-	}
+    // Replace a game’s details, but only when it belongs to the signed-in user.
+    @PutMapping("/{gameId}")
+    public BoardGameResponse update(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID gameId,
+            @Valid @RequestBody BoardGameRequest request)
+    {
+        return this.boardGameService.update(jwt.getIssuer().toString(), jwt.getSubject(), gameId, request);
+    }
 
-	// Delete a game only when it belongs to the signed-in user.
-	@DeleteMapping("/{gameId}")
-	public ResponseEntity<Void> delete(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID gameId)
-	{
-		this.boardGameService.delete(jwt.getIssuer().toString(), jwt.getSubject(), gameId);
-		return ResponseEntity.noContent().build();
-	}
+    // Delete a game only when it belongs to the signed-in user.
+    @DeleteMapping("/{gameId}")
+    public ResponseEntity<Void> delete(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID gameId)
+    {
+        this.boardGameService.delete(jwt.getIssuer().toString(), jwt.getSubject(), gameId);
+        return ResponseEntity.noContent().build();
+    }
 }

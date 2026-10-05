@@ -16,22 +16,22 @@ import com.SwampDragonInn.trackmyboardgames.service.UserProfileService;
 public class ApiController
 {
 
-	private final UserProfileService userProfileService;
+    private final UserProfileService userProfileService;
 
-	public ApiController(UserProfileService userProfileService)
-	{
-		this.userProfileService = userProfileService;
-	}
+    public ApiController(UserProfileService userProfileService)
+    {
+        this.userProfileService = userProfileService;
+    }
 
-	@GetMapping("/health")
-	public Map<String, String> health()
-	{
-		return Map.of("status", "ok");
-	}
+    @GetMapping("/health")
+    public Map<String, String> health()
+    {
+        return Map.of("status", "ok");
+    }
 
-	@GetMapping("/me")
-	public UserProfileResponse currentUser(@AuthenticationPrincipal Jwt jwt)
-	{
-		return UserProfileResponse.from(this.userProfileService.findOrCreate(jwt));
-	}
+    @GetMapping("/me")
+    public UserProfileResponse currentUser(@AuthenticationPrincipal Jwt jwt)
+    {
+        return UserProfileResponse.from(this.userProfileService.findOrCreate(jwt));
+    }
 }
