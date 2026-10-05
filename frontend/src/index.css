@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 :root {
   font-family: 'Avenir Next', Avenir, 'Trebuchet MS', sans-serif;
   color: #273a32;
