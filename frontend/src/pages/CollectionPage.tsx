@@ -1,36 +1,12 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
 import { Link } from 'react-router-dom'
+import BoardGameForm from '../components/BoardGameForm'
+import BoardGameCollection from '../components/BoardGameCollection'
+import type { BoardGame, GameFormValues } from '../types/boardGame'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 const apiAudience = import.meta.env.VITE_AUTH0_AUDIENCE || 'https://trackmyboardgames-api'
-
-type BoardGame = {
-    id: string
-    name: string
-    minPlayers: number | null
-    maxPlayers: number | null
-    playTimeMinutes: number | null
-    notes: string | null
-    createdAt: string
-    updatedAt: string
-}
-
-type GameForm = {
-    name: string
-    minPlayers: string
-    maxPlayers: string
-    playTimeMinutes: string
-    notes: string
-}
-
-const emptyGameForm: GameForm = {
-    name: '',
-    minPlayers: '',
-    maxPlayers: '',
-    playTimeMinutes: '',
-    notes: '',
-}
 
 async function responseError(response: Response)
 {
@@ -44,10 +20,11 @@ function CollectionPage()
 {
     const { user, logout, getAccessTokenSilently } = useAuth0()
     const [games, setGames] = useState<BoardGame[]>([])
-    const [form, setForm] = useState<GameForm>(emptyGameForm)
     const [isLoading, setIsLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
-    const [isFormOpen, setIsFormOpen] = useState(false)
+    const [isAddFormOpen, setIsAddFormOpen] = useState(false)
+    const [editingGame, setEditingGame] = useState<BoardGame | null>(null)
+    const [deletingGameId, setDeletingGameId] = useState<string | null>(null)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
@@ -104,10 +81,9 @@ function CollectionPage()
         }
     }, [getAccessTokenSilently])
 
-    // Send the form with write:games; the backend assigns the owner from the validated token.
-    async function handleSubmit(event: FormEvent<HTMLFormElement>)
+    // Create or update a game; the backend assigns and verifies ownership from the validated token.
+    async function handleSubmit(values: GameFormValues)
     {
-        event.preventDefault()
         setIsSaving(true)
         setErrorMessage(null)
         setSuccessMessage(null)
@@ -118,37 +94,46 @@ function CollectionPage()
                 authorizationParams: { audience: apiAudience, scope: 'write:games' },
             })
             // Send only game details; Spring determines the owner from the validated token.
-            const response = await fetch(`${apiBaseUrl}/api/games`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
+            const response = await fetch(
+                editingGame ? `${apiBaseUrl}/api/games/${editingGame.id}` : `${apiBaseUrl}/api/games`,
+                {
+                    method: editingGame ? 'PUT' : 'POST',
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        name: values.name.trim(),
+                        minPlayers: values.minPlayers ? Number(values.minPlayers) : undefined,
+                        maxPlayers: values.maxPlayers ? Number(values.maxPlayers) : undefined,
+                        playTimeMinutes: values.playTimeMinutes ? Number(values.playTimeMinutes) : undefined,
+                        notes: values.notes.trim() || undefined,
+                    }),
                 },
-                body: JSON.stringify({
-                    name: form.name.trim(),
-                    minPlayers: form.minPlayers ? Number(form.minPlayers) : undefined,
-                    maxPlayers: form.maxPlayers ? Number(form.maxPlayers) : undefined,
-                    playTimeMinutes: form.playTimeMinutes ? Number(form.playTimeMinutes) : undefined,
-                    notes: form.notes.trim() || undefined,
-                }),
-            })
+            )
 
             if (!response.ok)
             {
                 throw new Error(await responseError(response))
             }
 
-            const createdGame = await response.json() as BoardGame
-            // Use the created record returned by Spring to update the list without fetching it again.
-            setGames(currentGames => [...currentGames, createdGame].sort((left, right) =>
-                left.name.localeCompare(right.name)))
-            setForm(emptyGameForm)
-            setIsFormOpen(false)
-            setSuccessMessage(`${createdGame.name} was added to your collection.`)
+            const savedGame = await response.json() as BoardGame
+            setGames(currentGames =>
+            {
+                const updatedGames = currentGames.filter(game => game.id !== savedGame.id)
+                updatedGames.push(savedGame)
+                updatedGames.sort((left, right) => left.name.localeCompare(right.name))
+                return updatedGames
+            })
+            setIsAddFormOpen(false)
+            setEditingGame(null)
+            setSuccessMessage(editingGame
+                ? `${savedGame.name} was updated.`
+                : `${savedGame.name} was added to your collection.`)
         }
         catch (error)
         {
-            setErrorMessage(error instanceof Error ? error.message : 'Could not add this game.')
+            setErrorMessage(error instanceof Error ? error.message : 'Could not save this game.')
         }
         finally
         {
@@ -156,7 +141,70 @@ function CollectionPage()
         }
     }
 
-    // Render the add form and the collection's loading, empty, error, and game-list states.
+    // Delete only after the user confirms; the backend still enforces collection ownership.
+    async function handleDelete(game: BoardGame)
+    {
+        if (!window.confirm(`Delete ${game.name} from your collection?`)) return
+
+        setDeletingGameId(game.id)
+        setErrorMessage(null)
+        setSuccessMessage(null)
+
+        try
+        {
+            const accessToken = await getAccessTokenSilently({
+                authorizationParams: { audience: apiAudience, scope: 'write:games' },
+            })
+            const response = await fetch(`${apiBaseUrl}/api/games/${game.id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${accessToken}` },
+            })
+
+            if (!response.ok)
+            {
+                throw new Error(await responseError(response))
+            }
+
+            setGames(currentGames => currentGames.filter(existingGame => existingGame.id !== game.id))
+            if (editingGame?.id === game.id) setEditingGame(null)
+            setSuccessMessage(`${game.name} was deleted from your collection.`)
+        }
+        catch (error)
+        {
+            setErrorMessage(error instanceof Error ? error.message : 'Could not delete this game.')
+        }
+        finally
+        {
+            setDeletingGameId(null)
+        }
+    }
+
+    function openAddForm()
+    {
+        setEditingGame(null)
+        setIsAddFormOpen(true)
+        setErrorMessage(null)
+        setSuccessMessage(null)
+    }
+
+    function openEditForm(game: BoardGame)
+    {
+        setIsAddFormOpen(false)
+        setEditingGame(game)
+        setErrorMessage(null)
+        setSuccessMessage(null)
+    }
+
+    function closeForm()
+    {
+        setIsAddFormOpen(false)
+        setEditingGame(null)
+        setErrorMessage(null)
+    }
+
+    const isFormOpen = isAddFormOpen || editingGame !== null
+
+    // Render the form and the collection's loading, empty, error, and game-list states.
     return (
         <main className="min-h-screen w-full bg-[#e9eeea] px-4 py-5 text-[#273a32] sm:px-8 sm:py-8">
             <header className="mx-auto flex max-w-6xl items-center justify-between border-b border-[#cdd5cf] pb-4">
@@ -182,12 +230,7 @@ function CollectionPage()
                     <button
                         className="w-fit rounded bg-[#203c33] px-5 py-3 text-sm font-bold text-[#fffdf7] hover:bg-[#2e5548] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d17b4c]"
                         type="button"
-                        onClick={() =>
-                        {
-                            setIsFormOpen(open => !open)
-                            setErrorMessage(null)
-                            setSuccessMessage(null)
-                        }}
+                        onClick={isFormOpen ? closeForm : openAddForm}
                     >
                         {isFormOpen ? 'Cancel' : 'Add a game'}
                     </button>
@@ -205,75 +248,13 @@ function CollectionPage()
                 )}
 
                 {isFormOpen && (
-                    <form className="mt-7 rounded-md border border-[#cdd5cf] bg-[#fbfaf6] p-5 sm:p-7" onSubmit={handleSubmit}>
-                        <h2 className="font-serif text-2xl text-[#20352e]">Add a board game</h2>
-                        <p className="mt-1 text-sm text-[#65736b]">Name is required. The other details are optional.</p>
-                        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                            <label className="grid gap-1.5 text-sm font-semibold sm:col-span-2">
-                                Game name
-                                <input
-                                    className="min-h-11 rounded border border-[#bbc8be] bg-white px-3 font-normal outline-none focus:border-[#27634e] focus:ring-2 focus:ring-[#27634e]/20"
-                                    value={form.name}
-                                    onChange={event => setForm({ ...form, name: event.target.value })}
-                                    maxLength={200}
-                                    required
-                                    autoFocus
-                                />
-                            </label>
-                            <label className="grid gap-1.5 text-sm font-semibold">
-                                Minimum players
-                                <input
-                                    className="min-h-11 rounded border border-[#bbc8be] bg-white px-3 font-normal outline-none focus:border-[#27634e] focus:ring-2 focus:ring-[#27634e]/20"
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    value={form.minPlayers}
-                                    onChange={event => setForm({ ...form, minPlayers: event.target.value })}
-                                />
-                            </label>
-                            <label className="grid gap-1.5 text-sm font-semibold">
-                                Maximum players
-                                <input
-                                    className="min-h-11 rounded border border-[#bbc8be] bg-white px-3 font-normal outline-none focus:border-[#27634e] focus:ring-2 focus:ring-[#27634e]/20"
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    value={form.maxPlayers}
-                                    onChange={event => setForm({ ...form, maxPlayers: event.target.value })}
-                                />
-                            </label>
-                            <label className="grid gap-1.5 text-sm font-semibold">
-                                Play time in minutes
-                                <input
-                                    className="min-h-11 rounded border border-[#bbc8be] bg-white px-3 font-normal outline-none focus:border-[#27634e] focus:ring-2 focus:ring-[#27634e]/20"
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    value={form.playTimeMinutes}
-                                    onChange={event => setForm({ ...form, playTimeMinutes: event.target.value })}
-                                />
-                            </label>
-                            <label className="grid gap-1.5 text-sm font-semibold sm:col-span-2">
-                                Notes
-                                <textarea
-                                    className="min-h-24 rounded border border-[#bbc8be] bg-white px-3 py-2 font-normal outline-none focus:border-[#27634e] focus:ring-2 focus:ring-[#27634e]/20"
-                                    value={form.notes}
-                                    onChange={event => setForm({ ...form, notes: event.target.value })}
-                                    maxLength={4000}
-                                />
-                            </label>
-                        </div>
-                        <div className="mt-5 flex flex-wrap items-center gap-3">
-                            <button
-                                className="min-h-11 rounded bg-[#203c33] px-5 text-sm font-bold text-[#fffdf7] hover:bg-[#2e5548] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d17b4c] disabled:cursor-wait disabled:opacity-60"
-                                type="submit"
-                                disabled={isSaving}
-                            >
-                                {isSaving ? 'Saving...' : 'Save game'}
-                            </button>
-                            <span className="text-xs text-[#65736b]">Saved to your account’s collection.</span>
-                        </div>
-                    </form>
+                    <BoardGameForm
+                        key={editingGame?.id ?? 'new-game'}
+                        initialGame={editingGame ?? undefined}
+                        isSaving={isSaving}
+                        onCancel={closeForm}
+                        onSubmit={handleSubmit}
+                    />
                 )}
 
                 <div className="mt-8">
@@ -294,29 +275,19 @@ function CollectionPage()
                                 <button
                                     className="mt-5 rounded bg-[#203c33] px-5 py-2.5 text-sm font-bold text-[#fffdf7] hover:bg-[#2e5548]"
                                     type="button"
-                                    onClick={() => setIsFormOpen(true)}
+                                    onClick={openAddForm}
                                 >
                                     Add your first game
                                 </button>
                             )}
                         </div>
                     ) : (
-                        <ul className="divide-y divide-[#dce1da] border-y border-[#dce1da] bg-[#fbfaf6]">
-                            {games.map(game => (
-                                <li className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5" key={game.id}>
-                                    <div>
-                                        <h3 className="font-semibold text-[#20352e]">{game.name}</h3>
-                                        {game.notes && <p className="mt-1 max-w-2xl text-sm text-[#65736b]">{game.notes}</p>}
-                                    </div>
-                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#65736b]">
-                                        {(game.minPlayers || game.maxPlayers) && (
-                                            <span>{game.minPlayers ?? '?'}–{game.maxPlayers ?? '?'} players</span>
-                                        )}
-                                        {game.playTimeMinutes && <span>{game.playTimeMinutes} min</span>}
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
+                        <BoardGameCollection
+                            games={games}
+                            onEdit={openEditForm}
+                            onDelete={handleDelete}
+                            deletingGameId={deletingGameId}
+                        />
                     )}
                 </div>
             </section>
