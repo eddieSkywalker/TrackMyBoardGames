@@ -11,7 +11,7 @@ public record BoardGameResponse(
 		String name,
 		Integer minPlayers,
 		Integer maxPlayers,
-		Integer bestPlayers,
+		String bestPlayers,
 		Integer playTimeMinutes,
 		String notes,
 		Instant createdAt,

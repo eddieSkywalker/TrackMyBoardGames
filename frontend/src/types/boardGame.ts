@@ -4,7 +4,7 @@ export type BoardGame = {
     name: string
     minPlayers: number | null
     maxPlayers: number | null
-    bestPlayers: number | null
+    bestPlayers: string | null
     playTimeMinutes: number | null
     notes: string | null
     createdAt: string

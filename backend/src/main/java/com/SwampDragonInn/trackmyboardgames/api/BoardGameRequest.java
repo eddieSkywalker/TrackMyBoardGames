@@ -10,7 +10,7 @@ public record BoardGameRequest(
 		@NotBlank @Size(max = 200) String name,
 		@Min(1) Integer minPlayers,
 		@Min(1) Integer maxPlayers,
-		@Min(1) Integer bestPlayers,
+		@Size(max = 20) String bestPlayers,
 		@Positive Integer playTimeMinutes,
 		@Size(max = 4000) String notes)
 {

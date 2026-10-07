@@ -14,7 +14,7 @@ function createInitialValues(game?: BoardGame): GameFormValues
         name: game?.name ?? '',
         minPlayers: game?.minPlayers?.toString() ?? '',
         maxPlayers: game?.maxPlayers?.toString() ?? '',
-        bestPlayers: game?.bestPlayers?.toString() ?? '',
+        bestPlayers: game?.bestPlayers ?? '',
         playTimeMinutes: game?.playTimeMinutes?.toString() ?? '',
         notes: game?.notes ?? '',
     }
@@ -74,9 +74,8 @@ function BoardGameForm({ initialGame, isSaving, onCancel, onSubmit }: BoardGameF
                     Best played with
                     <input
                         className="input input-bordered w-full bg-base-100 font-normal"
-                        type="number"
-                        min="1"
-                        step="1"
+                        placeholder="e.g. 3-4"
+                        maxLength={20}
                         value={values.bestPlayers}
                         onChange={event => setValues({ ...values, bestPlayers: event.target.value })}
                     />

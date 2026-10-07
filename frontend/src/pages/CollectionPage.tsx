@@ -143,7 +143,7 @@ function CollectionPage()
                         name: values.name.trim(),
                         minPlayers: values.minPlayers ? Number(values.minPlayers) : undefined,
                         maxPlayers: values.maxPlayers ? Number(values.maxPlayers) : undefined,
-                        bestPlayers: values.bestPlayers ? Number(values.bestPlayers) : undefined,
+                        bestPlayers: values.bestPlayers.trim() || undefined,
                         playTimeMinutes: values.playTimeMinutes ? Number(values.playTimeMinutes) : undefined,
                         notes: values.notes.trim() || undefined,
                     }),

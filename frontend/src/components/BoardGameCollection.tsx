@@ -64,7 +64,7 @@ function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardG
                                             : '—'}
                                     </td>
                                     <td className="whitespace-nowrap text-base-content/70">
-                                        {game.bestPlayers ? `${game.bestPlayers} players` : '—'}
+                                        {game.bestPlayers || '—'}
                                     </td>
                                     <td className="whitespace-nowrap text-base-content/70">
                                         {game.playTimeMinutes ? `${game.playTimeMinutes} min` : '—'}

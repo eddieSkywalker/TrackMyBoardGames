@@ -83,7 +83,7 @@ class ApiSecurityTests
 		String ownerSubject = "auth0|owner-" + UUID.randomUUID();
 		String otherSubject = "auth0|other-" + UUID.randomUUID();
 		String request = """
-				{"name":"Catan","minPlayers":3,"maxPlayers":4,"bestPlayers":4,"playTimeMinutes":60,"notes":"Strategy game"}
+				{"name":"Catan","minPlayers":3,"maxPlayers":4,"bestPlayers":"3-4","playTimeMinutes":60,"notes":"Strategy game"}
 				""";
 
 		MvcResult created = this.mockMvc.perform(post("/api/games")
@@ -92,7 +92,7 @@ class ApiSecurityTests
 					.content(request))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.name").value("Catan"))
-				.andExpect(jsonPath("$.bestPlayers").value(4))
+				.andExpect(jsonPath("$.bestPlayers").value("3-4"))
 				.andReturn();
 		String location = created.getResponse().getHeader("Location");
 		String gameId = location.substring(location.lastIndexOf('/') + 1);
@@ -110,7 +110,7 @@ class ApiSecurityTests
 				.andExpect(status().isNotFound());
 
 		String updatedRequest = """
-				{"name":"Catan Updated","minPlayers":3,"maxPlayers":4,"bestPlayers":3,"playTimeMinutes":75,"notes":"Updated notes"}
+				{"name":"Catan Updated","minPlayers":3,"maxPlayers":4,"bestPlayers":"3","playTimeMinutes":75,"notes":"Updated notes"}
 				""";
 		this.mockMvc.perform(put("/api/games/{gameId}", gameId)
 					.with(token(otherSubject, "write:games"))
@@ -124,7 +124,7 @@ class ApiSecurityTests
 					.content(updatedRequest))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.name").value("Catan Updated"))
-				.andExpect(jsonPath("$.bestPlayers").value(3));
+				.andExpect(jsonPath("$.bestPlayers").value("3"));
 
 		this.mockMvc.perform(delete("/api/games/{gameId}", gameId)
 					.with(token(otherSubject, "write:games")))
