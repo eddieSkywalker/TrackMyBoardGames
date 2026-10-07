@@ -251,6 +251,7 @@ function CollectionPage()
                     <span>Track My Board Games</span>
                 </Link>
                 <div className="flex items-center gap-3">
+                    <p className="hidden text-sm text-base-content/70 sm:block">Welcome, {user?.name ?? user?.email ?? 'player'}</p>
                     <label className="swap swap-rotate btn btn-ghost btn-sm btn-circle text-primary" title="Toggle dark mode">
                         <input
                             type="checkbox"
@@ -279,7 +280,6 @@ function CollectionPage()
                     <div>
                         <p className="mb-3 text-xs font-bold tracking-[0.16em] text-secondary">YOUR COLLECTION</p>
                         <h1 className="font-serif text-4xl leading-tight text-base-content sm:text-5xl">Game shelf</h1>
-                        <p className="mt-3 text-sm text-base-content/70">Welcome, {user?.name ?? user?.email ?? 'player'}.</p>
                     </div>
                     <button
                         className="btn btn-primary w-fit px-5"
@@ -291,12 +291,12 @@ function CollectionPage()
                 </div>
 
                 {errorMessage && (
-                    <p className="alert alert-error mt-5 text-sm" role="alert">
+                    <p className="alert alert-soft alert-error mt-5 text-sm in-data-[theme=boardgame-light]:border-[#e2b6a9] in-data-[theme=boardgame-light]:bg-[#f7e9e5] in-data-[theme=boardgame-light]:text-[#792c23]" role="alert">
                         {errorMessage}
                     </p>
                 )}
                 {successMessage && (
-                    <p className="alert alert-success mt-5 text-sm" role="status">
+                    <p className="alert alert-soft alert-success mt-5 text-sm in-data-[theme=boardgame-light]:border-[#a9cbb4] in-data-[theme=boardgame-light]:bg-[#edf5ef] in-data-[theme=boardgame-light]:text-[#286344]" role="status">
                         {successMessage}
                     </p>
                 )}
