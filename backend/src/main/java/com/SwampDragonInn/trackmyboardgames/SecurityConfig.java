@@ -13,11 +13,15 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+// Defines which requests are public and which require Auth0 authentication and API permissions.
 @Configuration
-public class SecurityConfig {
+public class SecurityConfig
+{
 
+	// Allow the health check, then require the matching token permission for each protected API route.
 	@Bean
-	SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+	SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception
+	{
 		return http
 				.csrf(csrf -> csrf.disable())
 				.cors(Customizer.withDefaults())
@@ -26,14 +30,20 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 						.requestMatchers("/api/health").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/me").hasAuthority("SCOPE_read:profile")
+						.requestMatchers(HttpMethod.GET, "/api/games", "/api/games/**").hasAuthority("SCOPE_read:games")
+						.requestMatchers(HttpMethod.POST, "/api/games", "/api/games/**").hasAuthority("SCOPE_write:games")
+						.requestMatchers(HttpMethod.PUT, "/api/games/**").hasAuthority("SCOPE_write:games")
+						.requestMatchers(HttpMethod.DELETE, "/api/games/**").hasAuthority("SCOPE_write:games")
 						.requestMatchers("/api/**").authenticated()
 						.anyRequest().permitAll())
 				.oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
 				.build();
 	}
 
+	// Allow browser requests from the local React development server to reach this API.
 	@Bean
-	CorsConfigurationSource corsConfigurationSource() {
+	CorsConfigurationSource corsConfigurationSource()
+	{
 		CorsConfiguration configuration = new CorsConfiguration();
 		configuration.setAllowedOrigins(List.of("http://localhost:5173"));
 		configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));

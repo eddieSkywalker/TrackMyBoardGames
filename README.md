@@ -2,13 +2,13 @@
 
 A web app for managing a personal board-game collection, recording plays, and reviewing play history. The longer-term plan includes printable QR labels and camera scanning so a play can be logged quickly.
 
-**Status:** Early development. The React app has Auth0-hosted sign-in and registration flows plus a signed-in collection placeholder. Spring is configured to validate Auth0 JWTs, with public health and protected current-user endpoints. The Auth0 API resource exists, and the frontend requests its audience when testing the backend; Auth0 is currently rejecting that client/API access. Game APIs and database-backed application user records are not implemented yet.
+**Status:** Early development. Users can sign in with Auth0, and the React collection page can list and add board games through the Spring API. The backend creates a local profile linked to the Auth0 identity and restricts game queries to that profile. Play history, QR codes, scanning, and library insights are not implemented yet.
 
 See [BUILD_PLAN.md](BUILD_PLAN.md) for planned milestones and release goals.
 
 ## Technology
 
-- **Frontend:** React 19, TypeScript, Vite 8, React Router, Auth0 React SDK, ESLint
+- **Frontend:** React 19, TypeScript, Vite 8, Tailwind CSS, React Router, Auth0 React SDK, ESLint
 - **Backend:** Java 25, Spring Boot 4.1.1, Spring MVC, Spring Security OAuth2 Resource Server, Spring Data JPA, Hibernate, Spring Validation, Flyway
 - **Database:** PostgreSQL
 - **Authentication:** Auth0-hosted login and registration; securing backend API requests is still to be implemented
@@ -53,15 +53,19 @@ The React app reads its public Auth0 settings from `frontend/.env.local`:
 ```dotenv
 VITE_AUTH0_DOMAIN=<your-auth0-domain>
 VITE_AUTH0_CLIENT_ID=<your-auth0-spa-client-id>
+VITE_AUTH0_AUDIENCE=https://trackmyboardgames-api
+VITE_API_BASE_URL=http://localhost:8080
 ```
 
-This local file is ignored by Git. These values identify the Auth0 tenant and SPA; never put an Auth0 client secret in frontend code or a `VITE_` variable.
+This local file is ignored by Git. These values identify the Auth0 tenant/API and backend URL; never put an Auth0 client secret in frontend code or a `VITE_` variable. The React app uses the localhost API and audience values as defaults when the optional variables are unset.
 
 For local development, configure the Auth0 SPA's allowed callback URLs and logout URLs as `http://localhost:5173/`, and its allowed web origins as `http://localhost:5173`. Vite is configured to use port `5173` strictly so it matches those URLs.
 
 Create an API in the Auth0 Dashboard under **Applications → APIs** with identifier `https://trackmyboardgames-api` and signing algorithm `RS256`. The backend expects that identifier as the JWT audience and the Auth0 tenant as the issuer. Override the defaults using `AUTH0_AUDIENCE` and `AUTH0_ISSUER_URI` environment variables if they differ. Do not add an Auth0 client secret to the frontend.
 
-The React app requests an access token for this API only when **Test backend connection** is clicked, keeping ordinary sign-in separate from API authorization. Authorize the SPA to access the API in Auth0 before this request can succeed. Spring currently exposes public `GET /api/health` and protected `GET /api/me`; the latter returns the Auth0 subject from the validated token, not a database-backed user profile.
+The React app requests API tokens after sign-in. In the Auth0 API's **Permissions** tab, define `read:profile`, `read:games`, and `write:games`, then grant the SPA `read:profile` and the game permissions under **Application Access → User-Delegated Access**. Do not configure a client secret in the SPA or use Client Access (M2M) for browser calls.
+
+Spring exposes public `GET /api/health`, protected `GET /api/me`, and owner-scoped game routes: `GET /api/games`, `GET /api/games/{id}`, `POST /api/games`, `PUT /api/games/{id}`, and `DELETE /api/games/{id}`. The local profile stores the Auth0 issuer and subject; it does not store passwords.
 
 ## Run Locally
 
@@ -84,7 +88,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. Keep the terminal running while using the app. The current routes are `/login`, `/register`, and `/collection`.
+Open `http://localhost:5173`. Keep the terminal running while using the app. The current routes are `/login`, `/register`, and `/collection`. From the collection page, you can add a game and see your saved games.
 
 ## Checks
 
