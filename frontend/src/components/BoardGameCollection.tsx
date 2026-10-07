@@ -18,7 +18,7 @@ function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardG
         <>
             <label className="sr-only" htmlFor="game-search">Search games by name</label>
             <input
-                className="mb-3 min-h-10 w-full rounded border border-[#bbc8be] bg-white px-3 text-sm outline-none placeholder:text-[#7b8981] focus:border-[#27634e] focus:ring-2 focus:ring-[#27634e]/20 sm:max-w-sm"
+                className="input input-bordered mb-3 w-full bg-base-100 text-sm sm:max-w-sm"
                 id="game-search"
                 type="search"
                 placeholder="Search your games"
@@ -26,46 +26,60 @@ function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardG
                 onChange={event => setSearch(event.target.value)}
             />
             {filteredGames.length === 0 ? (
-                <p className="border-y border-[#dce1da] bg-[#fbfaf6] px-4 py-6 text-sm text-[#65736b]" role="status">
+                <p className="rounded-box border border-base-300 bg-base-100 px-4 py-6 text-sm text-base-content/70" role="status">
                     No games match “{search}”.
                 </p>
             ) : (
-                <div className="overflow-x-auto border-y border-[#dce1da] bg-[#fbfaf6]">
-                    <table className="w-full min-w-[42rem] border-collapse text-left text-sm">
-                        <thead className="bg-[#edf1ec] text-xs uppercase tracking-wide text-[#52665b]">
+                <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+                    <table className="table table-zebra w-full min-w-[52rem] text-sm">
+                        <thead className="text-xs uppercase tracking-wide text-base-content/70">
                             <tr>
-                                <th className="px-4 py-3 font-bold" scope="col">Game</th>
-                                <th className="px-4 py-3 font-bold" scope="col">Players</th>
-                                <th className="px-4 py-3 font-bold" scope="col">Play time</th>
-                                <th className="px-4 py-3 text-right font-bold" scope="col">Actions</th>
+                                <th scope="col">Cover</th>
+                                <th scope="col">Game</th>
+                                <th scope="col">Players</th>
+                                <th scope="col">Best with</th>
+                                <th scope="col">Play time</th>
+                                <th className="text-right" scope="col">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-[#dce1da]">
+                        <tbody>
                             {filteredGames.map(game => (
-                                <tr className="transition-colors hover:bg-[#eef3ed]" key={game.id}>
-                                    <th className="px-4 py-4 font-semibold text-[#20352e]" scope="row">
+                                <tr className="transition-colors hover:bg-base-300" key={game.id}>
+                                    <td>
+                                        <div
+                                            className="grid size-14 shrink-0 place-items-center rounded bg-base-300 text-[10px] font-semibold uppercase tracking-wide text-base-content/60"
+                                            role="img"
+                                            aria-label={`${game.name} cover image placeholder`}
+                                        >
+                                            No cover
+                                        </div>
+                                    </td>
+                                    <th className="max-w-sm whitespace-normal font-semibold text-base-content" scope="row">
                                         <div>{game.name}</div>
-                                        {game.notes && <p className="mt-1 max-w-2xl whitespace-normal text-left text-xs font-normal text-[#65736b]">{game.notes}</p>}
+                                        {game.notes && <p className="mt-1 text-left text-xs font-normal text-base-content/70">{game.notes}</p>}
                                     </th>
-                                    <td className="whitespace-nowrap px-4 py-4 text-[#65736b]">
+                                    <td className="whitespace-nowrap text-base-content/70">
                                         {(game.minPlayers || game.maxPlayers)
                                             ? `${game.minPlayers ?? '?'}–${game.maxPlayers ?? '?'} players`
                                             : '—'}
                                     </td>
-                                    <td className="whitespace-nowrap px-4 py-4 text-[#65736b]">
+                                    <td className="whitespace-nowrap text-base-content/70">
+                                        {game.bestPlayers ? `${game.bestPlayers} players` : '—'}
+                                    </td>
+                                    <td className="whitespace-nowrap text-base-content/70">
                                         {game.playTimeMinutes ? `${game.playTimeMinutes} min` : '—'}
                                     </td>
-                                    <td className="px-4 py-4">
-                                        <div className="flex justify-end gap-3">
+                                    <td>
+                                        <div className="flex justify-end gap-2">
                                             <button
-                                                className="font-semibold text-[#27634e] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d17b4c]"
+                                                className="btn btn-ghost btn-sm text-primary"
                                                 type="button"
                                                 onClick={() => onEdit(game)}
                                             >
                                                 Edit
                                             </button>
                                             <button
-                                                className="font-semibold text-[#9a3f2d] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d17b4c] disabled:cursor-wait disabled:opacity-60"
+                                                className="btn btn-ghost btn-sm text-error"
                                                 type="button"
                                                 onClick={() => onDelete(game)}
                                                 disabled={deletingGameId === game.id}

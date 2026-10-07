@@ -11,6 +11,7 @@
         <setting id="org.eclipse.jdt.core.formatter.brace_position_for_lambda_body" value="next_line"/>
         <setting id="org.eclipse.jdt.core.formatter.brace_position_for_method_declaration" value="next_line"/>
         <setting id="org.eclipse.jdt.core.formatter.brace_position_for_record_declaration" value="next_line"/>
+        <setting id="org.eclipse.jdt.core.formatter.alignment_for_record_components" value="49"/>
         <setting id="org.eclipse.jdt.core.formatter.brace_position_for_switch" value="next_line"/>
         <setting id="org.eclipse.jdt.core.formatter.brace_position_for_type_declaration" value="next_line"/>
         <setting id="org.eclipse.jdt.core.formatter.insert_new_line_before_catch_in_try_statement" value="insert"/>

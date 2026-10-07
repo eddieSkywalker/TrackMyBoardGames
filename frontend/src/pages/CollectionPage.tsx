@@ -7,6 +7,23 @@ import type { BoardGame, GameFormValues } from '../types/boardGame'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 const apiAudience = import.meta.env.VITE_AUTH0_AUDIENCE || 'https://trackmyboardgames-api'
+const themeStorageKey = 'track-my-board-games-theme'
+
+type CollectionTheme = 'boardgame-light' | 'boardgame-dark'
+
+function getSavedTheme(): CollectionTheme
+{
+    try
+    {
+        return window.localStorage.getItem(themeStorageKey) === 'boardgame-dark'
+            ? 'boardgame-dark'
+            : 'boardgame-light'
+    }
+    catch
+    {
+        return 'boardgame-light'
+    }
+}
 
 async function responseError(response: Response)
 {
@@ -20,6 +37,7 @@ function CollectionPage()
 {
     const { user, logout, getAccessTokenSilently } = useAuth0()
     const [games, setGames] = useState<BoardGame[]>([])
+    const [theme, setTheme] = useState<CollectionTheme>(getSavedTheme)
     const [isLoading, setIsLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
     const [isAddFormOpen, setIsAddFormOpen] = useState(false)
@@ -27,6 +45,25 @@ function CollectionPage()
     const [deletingGameId, setDeletingGameId] = useState<string | null>(null)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+    useEffect(() =>
+    {
+        try
+        {
+            window.localStorage.setItem(themeStorageKey, theme)
+        }
+        catch
+        {
+            // The collection remains usable when browser storage is unavailable.
+        }
+    }, [theme])
+
+    // Apply the theme to <html> so the area around #root (its padding) follows it too.
+    useEffect(() =>
+    {
+        document.documentElement.setAttribute('data-theme', theme)
+        return () => document.documentElement.removeAttribute('data-theme')
+    }, [theme])
 
     // Load this user's games with the read:games permission when the page opens.
     useEffect(() =>
@@ -207,29 +244,45 @@ function CollectionPage()
 
     // Render the form and the collection's loading, empty, error, and game-list states.
     return (
-        <main className="min-h-screen w-full bg-[#e9eeea] px-4 py-5 text-[#273a32] sm:px-8 sm:py-8">
-            <header className="mx-auto flex max-w-6xl items-center justify-between border-b border-[#cdd5cf] pb-4">
-                <Link className="flex items-center gap-3 text-sm font-bold text-[#203c33] no-underline" to="/collection">
-                    <span className="grid size-9 place-items-center rounded border border-[#7d978b] font-serif text-sm">TB</span>
+        <main data-theme={theme} className="min-h-screen w-full bg-base-200 px-4 py-5 text-base-content sm:px-8 sm:py-8">
+            <header className="mx-auto flex max-w-6xl items-center justify-between border-b border-base-300 pb-4">
+                <Link className="flex items-center gap-3 text-sm font-bold text-primary no-underline" to="/collection">
+                    <span className="grid size-9 place-items-center rounded border border-base-300 font-serif text-sm">TB</span>
                     <span>Track My Board Games</span>
                 </Link>
-                <button
-                    className="rounded px-3 py-2 text-sm font-semibold text-[#8b4c32] hover:bg-[#dfe7e0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d17b4c]"
-                    type="button"
-                    onClick={() => logout({ logoutParams: { returnTo: `${window.location.origin}/` } })}
-                >
-                    Sign out
-                </button>
+                <div className="flex items-center gap-3">
+                    <label className="swap swap-rotate btn btn-ghost btn-sm btn-circle text-primary" title="Toggle dark mode">
+                        <input
+                            type="checkbox"
+                            aria-label="Dark mode"
+                            checked={theme === 'boardgame-dark'}
+                            onChange={event => setTheme(event.target.checked ? 'boardgame-dark' : 'boardgame-light')}
+                        />
+                        <svg className="swap-on size-5 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M9 21a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1H9v1Zm3-19a7 7 0 0 0-4 12.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26A7 7 0 0 0 12 2Z" />
+                        </svg>
+                        <svg className="swap-off size-5 fill-none stroke-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M9 21h6M10 18h4m-5.5-3.5a7 7 0 1 1 7 0c-.9.7-1.5 1.5-1.5 2.5h-4c0-1-.6-1.8-1.5-2.5Z" />
+                        </svg>
+                    </label>
+                    <button
+                        className="btn btn-ghost btn-sm text-secondary"
+                        type="button"
+                        onClick={() => logout({ logoutParams: { returnTo: `${window.location.origin}/` } })}
+                    >
+                        Sign out
+                    </button>
+                </div>
             </header>
             <section className="mx-auto max-w-6xl py-10 sm:py-14">
-                <div className="flex flex-col justify-between gap-6 border-b border-[#cdd5cf] pb-7 sm:flex-row sm:items-end">
+                <div className="flex flex-col justify-between gap-6 border-b border-base-300 pb-7 sm:flex-row sm:items-end">
                     <div>
-                        <p className="mb-3 text-xs font-bold tracking-[0.16em] text-[#a45436]">YOUR COLLECTION</p>
-                        <h1 className="font-serif text-4xl leading-tight text-[#20352e] sm:text-5xl">Game shelf</h1>
-                        <p className="mt-3 text-sm text-[#65736b]">Welcome, {user?.name ?? user?.email ?? 'player'}.</p>
+                        <p className="mb-3 text-xs font-bold tracking-[0.16em] text-secondary">YOUR COLLECTION</p>
+                        <h1 className="font-serif text-4xl leading-tight text-base-content sm:text-5xl">Game shelf</h1>
+                        <p className="mt-3 text-sm text-base-content/70">Welcome, {user?.name ?? user?.email ?? 'player'}.</p>
                     </div>
                     <button
-                        className="w-fit rounded bg-[#203c33] px-5 py-3 text-sm font-bold text-[#fffdf7] hover:bg-[#2e5548] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d17b4c]"
+                        className="btn btn-primary w-fit px-5"
                         type="button"
                         onClick={isFormOpen ? closeForm : openAddForm}
                     >
@@ -238,12 +291,12 @@ function CollectionPage()
                 </div>
 
                 {errorMessage && (
-                    <p className="mt-5 rounded border border-[#e2b6a9] bg-[#f7e9e5] px-4 py-3 text-sm text-[#792c23]" role="alert">
+                    <p className="alert alert-error mt-5 text-sm" role="alert">
                         {errorMessage}
                     </p>
                 )}
                 {successMessage && (
-                    <p className="mt-5 rounded border border-[#a9cbb4] bg-[#edf5ef] px-4 py-3 text-sm text-[#286344]" role="status">
+                    <p className="alert alert-success mt-5 text-sm" role="status">
                         {successMessage}
                     </p>
                 )}
@@ -260,21 +313,21 @@ function CollectionPage()
 
                 <div className="mt-8">
                     <div className="mb-3 flex items-baseline justify-between">
-                        <h2 className="text-base font-bold text-[#20352e]">Your games</h2>
-                        {!isLoading && <span className="text-xs text-[#65736b]">{games.length} {games.length === 1 ? 'game' : 'games'}</span>}
+                        <h2 className="text-base font-bold text-base-content">Your games</h2>
+                        {!isLoading && <span className="text-xs text-base-content/70">{games.length} {games.length === 1 ? 'game' : 'games'}</span>}
                     </div>
 
                     {isLoading ? (
-                        <p className="rounded border border-[#cdd5cf] bg-[#fbfaf6] px-4 py-6 text-sm text-[#65736b]" role="status">
+                        <p className="rounded-box border border-base-300 bg-base-100 px-4 py-6 text-sm text-base-content/70" role="status">
                             Loading your games...
                         </p>
                     ) : games.length === 0 ? (
-                        <div className="rounded border border-dashed border-[#aebdb2] bg-[#f3f5f1] px-5 py-10 text-center">
-                            <p className="font-serif text-2xl text-[#20352e]">Your shelf is ready.</p>
-                            <p className="mt-2 text-sm text-[#65736b]">Add your first game to start building your collection.</p>
+                        <div className="rounded-box border border-dashed border-base-300 bg-base-100 px-5 py-10 text-center">
+                            <p className="font-serif text-2xl text-base-content">Your shelf is ready.</p>
+                            <p className="mt-2 text-sm text-base-content/70">Add your first game to start building your collection.</p>
                             {!isFormOpen && (
                                 <button
-                                    className="mt-5 rounded bg-[#203c33] px-5 py-2.5 text-sm font-bold text-[#fffdf7] hover:bg-[#2e5548]"
+                                    className="btn btn-primary mt-5 px-5"
                                     type="button"
                                     onClick={openAddForm}
                                 >

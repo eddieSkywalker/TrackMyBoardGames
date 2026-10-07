@@ -1,10 +1,79 @@
 @import "tailwindcss";
-@plugin "daisyui";
+@plugin "daisyui" {
+  themes: boardgame-light --default, boardgame-dark;
+}
+@plugin "daisyui/theme" {
+  name: "boardgame-light";
+  default: true;
+  color-scheme: light;
+
+  --color-base-100: #fbfaf6;
+  --color-base-200: #e9eeea;
+  --color-base-300: #dce1da;
+  --color-base-content: #273a32;
+  --color-primary: #203c33;
+  --color-primary-content: #fffdf7;
+  --color-secondary: #a45436;
+  --color-secondary-content: #fffdf7;
+  --color-accent: #d17b4c;
+  --color-accent-content: #20352e;
+  --color-neutral: #65736b;
+  --color-neutral-content: #fffdf7;
+  --color-info: #27634e;
+  --color-info-content: #fffdf7;
+  --color-success: #286344;
+  --color-success-content: #fffdf7;
+  --color-warning: #bd6843;
+  --color-warning-content: #fffdf7;
+  --color-error: #9a352b;
+  --color-error-content: #fffdf7;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+@plugin "daisyui/theme" {
+  name: "boardgame-dark";
+  color-scheme: dark;
+
+  --color-base-100: #1d2b25;
+  --color-base-200: #15211b;
+  --color-base-300: #33463b;
+  --color-base-content: #e9eee9;
+  --color-primary: #a9cbb4;
+  --color-primary-content: #17231d;
+  --color-secondary: #e2ad8c;
+  --color-secondary-content: #302018;
+  --color-accent: #d17b4c;
+  --color-accent-content: #24150e;
+  --color-neutral: #a9bdb3;
+  --color-neutral-content: #15211b;
+  --color-info: #82b9a0;
+  --color-info-content: #10231a;
+  --color-success: #85c79c;
+  --color-success-content: #10231a;
+  --color-warning: #e0a16e;
+  --color-warning-content: #302018;
+  --color-error: #ed9788;
+  --color-error-content: #301613;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
 
 :root {
   font-family: 'Avenir Next', Avenir, 'Trebuchet MS', sans-serif;
-  color: #273a32;
-  background: #e9eeea;
+  color: var(--color-base-content);
+  background: var(--color-base-200);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

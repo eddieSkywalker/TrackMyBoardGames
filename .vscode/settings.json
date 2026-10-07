@@ -2,7 +2,7 @@
     "editor.insertSpaces": true,
     "editor.tabSize": 4,
     "editor.detectIndentation": false,
-    "editor.formatOnSave": true,
+    // "editor.formatOnSave": true,
     "[javascript]": {
         "editor.defaultFormatter": "vscode.typescript-language-features",
         "editor.insertSpaces": true,
