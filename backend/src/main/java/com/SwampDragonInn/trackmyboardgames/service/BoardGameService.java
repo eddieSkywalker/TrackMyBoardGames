@@ -59,7 +59,7 @@ public class BoardGameService
 		validatePlayerRange(request);
 		AppUser owner = this.userProfileService.findOrCreate(subjectIssuer, subject);
 		BoardGame game = new BoardGame(owner, request.name().trim(), request.minPlayers(),
-				request.maxPlayers(), request.playTimeMinutes(), request.notes());
+				request.maxPlayers(), request.bestPlayers(), request.playTimeMinutes(), request.notes());
 
 		return BoardGameResponse.from(this.boardGameRepository.save(game));
 	}
@@ -72,7 +72,7 @@ public class BoardGameService
 		AppUser owner = this.userProfileService.findOrCreate(subjectIssuer, subject);
 		BoardGame game = findOwnedGame(owner.getId(), gameId);
 		game.updateDetails(request.name().trim(), request.minPlayers(), request.maxPlayers(),
-				request.playTimeMinutes(), request.notes());
+				request.bestPlayers(), request.playTimeMinutes(), request.notes());
 
 		return BoardGameResponse.from(this.boardGameRepository.save(game));
 	}

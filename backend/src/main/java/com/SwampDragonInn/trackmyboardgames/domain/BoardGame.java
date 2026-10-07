@@ -38,6 +38,9 @@ public class BoardGame
 	@Column(name = "max_players")
 	private Integer maxPlayers;
 
+	@Column(name = "best_players")
+	private Integer bestPlayers;
+
 	@Column(name = "play_time_minutes")
 	private Integer playTimeMinutes;
 
@@ -55,18 +58,19 @@ public class BoardGame
 	}
 
 	public BoardGame(AppUser owner, String name, Integer minPlayers, Integer maxPlayers,
-			Integer playTimeMinutes, String notes)
+			Integer bestPlayers, Integer playTimeMinutes, String notes)
 	{
 		this.owner = owner;
-		updateDetails(name, minPlayers, maxPlayers, playTimeMinutes, notes);
+		updateDetails(name, minPlayers, maxPlayers, bestPlayers, playTimeMinutes, notes);
 	}
 
 	public void updateDetails(String name, Integer minPlayers, Integer maxPlayers,
-			Integer playTimeMinutes, String notes)
+			Integer bestPlayers, Integer playTimeMinutes, String notes)
 	{
 		this.name = name;
 		this.minPlayers = minPlayers;
 		this.maxPlayers = maxPlayers;
+		this.bestPlayers = bestPlayers;
 		this.playTimeMinutes = playTimeMinutes;
 		this.notes = notes;
 	}
@@ -108,6 +112,11 @@ public class BoardGame
 	public Integer getMaxPlayers()
 	{
 		return this.maxPlayers;
+	}
+
+	public Integer getBestPlayers()
+	{
+		return this.bestPlayers;
 	}
 
 	public Integer getPlayTimeMinutes()

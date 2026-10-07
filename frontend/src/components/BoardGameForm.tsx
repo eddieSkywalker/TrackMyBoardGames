@@ -14,6 +14,7 @@ function createInitialValues(game?: BoardGame): GameFormValues
         name: game?.name ?? '',
         minPlayers: game?.minPlayers?.toString() ?? '',
         maxPlayers: game?.maxPlayers?.toString() ?? '',
+        bestPlayers: game?.bestPlayers?.toString() ?? '',
         playTimeMinutes: game?.playTimeMinutes?.toString() ?? '',
         notes: game?.notes ?? '',
     }

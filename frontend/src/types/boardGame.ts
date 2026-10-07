@@ -4,6 +4,7 @@ export type BoardGame = {
     name: string
     minPlayers: number | null
     maxPlayers: number | null
+    bestPlayers: number | null
     playTimeMinutes: number | null
     notes: string | null
     createdAt: string
@@ -14,6 +15,7 @@ export type GameFormValues = {
     name: string
     minPlayers: string
     maxPlayers: string
+    bestPlayers: string
     playTimeMinutes: string
     notes: string
 }
