@@ -11,6 +11,17 @@ export type BoardGame = {
     updatedAt: string
 }
 
+export type GamePlay = {
+    id: string
+    gameId: string
+    playedOn: string
+    durationMinutes: number | null
+    playerCount: number | null
+    notes: string | null
+    createdAt: string
+    updatedAt: string
+}
+
 export type GameFormValues = {
     name: string
     minPlayers: string

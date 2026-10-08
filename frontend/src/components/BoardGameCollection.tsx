@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import type { BoardGame } from '../types/boardGame'
 
 type BoardGameCollectionProps = {
@@ -55,7 +56,7 @@ function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardG
                                         </div>
                                     </td>
                                     <th className="max-w-sm whitespace-normal font-semibold text-base-content" scope="row">
-                                        <div>{game.name}</div>
+                                        <Link className="link link-primary font-semibold" to={`/collection/${game.id}`}>{game.name}</Link>
                                         {game.notes && <p className="mt-1 text-left text-xs font-normal text-base-content/70">{game.notes}</p>}
                                     </th>
                                     <td className="whitespace-nowrap text-base-content/70">

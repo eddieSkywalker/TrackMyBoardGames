@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import LoginRegisterPage from './pages/LoginRegisterPage'
 import CollectionPage from './pages/CollectionPage'
+import PlayHistoryPage from './pages/PlayHistoryPage'
 import HomeRoute from './routing/HomeRoute'
 import ProtectedRoute from './routing/ProtectedRoute'
 import './App.css'
@@ -16,6 +17,10 @@ function App()
             <Route
                 path="/collection"
                 element={<ProtectedRoute><CollectionPage /></ProtectedRoute>}
+            />
+            <Route
+                path="/collection/:gameId"
+                element={<ProtectedRoute><PlayHistoryPage /></ProtectedRoute>}
             />
             <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
