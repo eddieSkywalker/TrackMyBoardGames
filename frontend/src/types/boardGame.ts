@@ -22,6 +22,13 @@ export type GamePlay = {
     updatedAt: string
 }
 
+export type PlayFormValues = {
+    playedOn: string
+    durationMinutes: string
+    playerCount: string
+    notes: string
+}
+
 export type GameFormValues = {
     name: string
     minPlayers: string
