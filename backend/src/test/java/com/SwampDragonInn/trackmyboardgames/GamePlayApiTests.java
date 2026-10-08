@@ -193,6 +193,36 @@ class GamePlayApiTests
 				.andExpect(status().isForbidden());
 	}
 
+	// Scenario: the games list and single-game endpoint report how many plays each game has and when it was last played.
+	@Test
+	void gamesReportTheirPlayCountAndLastPlayedDate() throws Exception
+	{
+		// Arrange: one game with two plays and another game with none
+		String ownerSubject = "auth0|owner-" + UUID.randomUUID();
+		String playedGameId = createGame(ownerSubject);
+		String unplayedGameId = createGame(ownerSubject);
+		for (String date : new String[] { "2026-01-10", "2026-02-20" })
+		{
+			this.mockMvc.perform(post("/api/games/{gameId}/plays", playedGameId)
+						.with(token(ownerSubject, "write:games"))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"playedOn\":\"" + date + "\"}"))
+					.andExpect(status().isCreated());
+		}
+
+		// Act + Assert: the single-game endpoint shows the totals for the played game
+		this.mockMvc.perform(get("/api/games/{gameId}", playedGameId).with(token(ownerSubject, "read:games")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.playCount").value(2))
+				.andExpect(jsonPath("$.lastPlayedOn").value("2026-02-20"));
+
+		// Act + Assert: the list shows 2 plays for one game and 0 (no last date) for the other
+		this.mockMvc.perform(get("/api/games").with(token(ownerSubject, "read:games")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[?(@.id == '" + playedGameId + "')].playCount").value(2))
+				.andExpect(jsonPath("$[?(@.id == '" + unplayedGameId + "')].playCount").value(0))
+				.andExpect(jsonPath("$[?(@.id == '" + unplayedGameId + "')].lastPlayedOn").value((Object) null));
+	}
 	// Helper: creates a game for this user and returns its id, so each test starts with a game to attach plays to.
 	private String createGame(String subject) throws Exception
 	{

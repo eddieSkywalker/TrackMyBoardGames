@@ -7,6 +7,8 @@ export type BoardGame = {
     bestPlayers: string | null
     playTimeMinutes: number | null
     notes: string | null
+    playCount: number
+    lastPlayedOn: string | null
     createdAt: string
     updatedAt: string
 }
