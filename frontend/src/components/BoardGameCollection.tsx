@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import type { BoardGame } from '../types/boardGame'
 
 type BoardGameCollectionProps = {
@@ -39,7 +40,8 @@ function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardG
                                 <th scope="col">Players</th>
                                 <th scope="col">Best with</th>
                                 <th scope="col">Play time</th>
-                                <th className="text-right" scope="col">Actions</th>
+                                <th scope="col">Plays</th>
+                                <th className="w-px whitespace-nowrap text-right" scope="col">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -55,7 +57,7 @@ function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardG
                                         </div>
                                     </td>
                                     <th className="max-w-sm whitespace-normal font-semibold text-base-content" scope="row">
-                                        <div>{game.name}</div>
+                                        <Link className="link link-primary font-semibold" to={`/collection/${game.id}`}>{game.name}</Link>
                                         {game.notes && <p className="mt-1 text-left text-xs font-normal text-base-content/70">{game.notes}</p>}
                                     </th>
                                     <td className="whitespace-nowrap text-base-content/70">
@@ -69,7 +71,10 @@ function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardG
                                     <td className="whitespace-nowrap text-base-content/70">
                                         {game.playTimeMinutes ? `${game.playTimeMinutes} min` : '—'}
                                     </td>
-                                    <td>
+                                    <td className="whitespace-nowrap text-base-content/70">
+                                        {game.playCount}
+                                    </td>
+                                    <td className="w-px whitespace-nowrap">
                                         <div className="flex justify-end gap-2">
                                             <button
                                                 className="btn btn-ghost btn-sm text-primary"
