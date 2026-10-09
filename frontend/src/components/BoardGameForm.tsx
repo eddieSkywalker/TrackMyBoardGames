@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import type { BoardGame, GameFormValues } from '../types/boardGame'
 import { blobToDataUrl } from '../api/imageApi'
 import ImagePicker from './ImagePicker'
+import QrLabelField from './QrLabelField'
 
 type BoardGameFormProps = {
     initialGame?: BoardGame
@@ -128,7 +129,8 @@ function BoardGameForm({ initialGame, isSaving, onCancel, onSubmit }: BoardGameF
                         onChange={event => setValues({ ...values, playTimeMinutes: event.target.value })}
                     />
                 </label>
-                <div className="grid gap-2 sm:col-span-3">
+                <div className="flex flex-wrap gap-x-12 gap-y-5 sm:col-span-3">
+                <div className="grid gap-2">
                     <span className="text-sm font-semibold">Cover photo</span>
                     <div className="flex flex-wrap items-center gap-4">
                         {renderCoverPreview()}
@@ -146,6 +148,9 @@ function BoardGameForm({ initialGame, isSaving, onCancel, onSubmit }: BoardGameF
                             )}
                         </div>
                     </div>
+                </div>
+                {/* A new game has no id yet, so QR codes can only be made once the game exists. */}
+                {initialGame && <QrLabelField gameId={initialGame.id} disabled={isSaving} />}
                 </div>
                 <label className="grid gap-1.5 text-sm font-semibold sm:col-span-3">
                     Notes

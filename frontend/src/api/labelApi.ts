@@ -49,6 +49,20 @@ export async function createLabel(gameId: string, accessToken: string | undefine
     return await response.json() as QrLabel
 }
 
+// Stop a label from working (needs write:games). The printed sticker will no longer scan to the game.
+export async function revokeLabel(gameId: string, labelId: string, accessToken: string | undefined): Promise<void>
+{
+    const token = requireToken(accessToken)
+    const response = await fetch(`${apiBaseUrl}/api/games/${gameId}/labels/${labelId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+    })
+
+    if (!response.ok)
+    {
+        throw new Error(await responseError(response))
+    }
+}
 // Find the label that is still working for a game, or null if the game has none yet.
 export function findActiveLabel(labels: QrLabel[], gameId: string): QrLabel | null
 {
