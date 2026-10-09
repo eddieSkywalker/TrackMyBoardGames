@@ -9,6 +9,8 @@ export type BoardGame = {
     notes: string | null
     playCount: number
     lastPlayedOn: string | null
+    // The cover photo written as text ("data:image/jpeg;base64,..."), ready to use as an <img> src; null if none.
+    coverImage: string | null
     createdAt: string
     updatedAt: string
 }

@@ -3,6 +3,8 @@ package com.SwampDragonInn.trackmyboardgames.domain;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.hibernate.annotations.DynamicUpdate;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -16,6 +18,8 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 // JPA model for a board game; each row belongs to one local app user through owner.
+// DynamicUpdate makes saves write only the columns that changed, so editing a note does not resend the cover picture.
+@DynamicUpdate
 @Entity
 @Table(name = "board_games")
 public class BoardGame
@@ -47,6 +51,13 @@ public class BoardGame
 	@Column(length = 4000)
 	private String notes;
 
+	// The cover photo: empty (null) when the game has none. The content type says if the bytes are JPEG, PNG or WebP.
+	@Column(name = "cover_content_type", length = 50)
+	private String coverContentType;
+
+	@Column(name = "cover_image")
+	private byte[] coverImage;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -73,6 +84,24 @@ public class BoardGame
 		this.bestPlayers = bestPlayers;
 		this.playTimeMinutes = playTimeMinutes;
 		this.notes = notes;
+	}
+
+	// Save a new cover photo, replacing any existing one.
+	public void setCover(String contentType, byte[] image)
+	{
+		this.coverContentType = contentType;
+		this.coverImage = image;
+	}
+
+	public void removeCover()
+	{
+		this.coverContentType = null;
+		this.coverImage = null;
+	}
+
+	public boolean hasCover()
+	{
+		return this.coverImage != null;
 	}
 
 	@PrePersist
@@ -127,6 +156,16 @@ public class BoardGame
 	public String getNotes()
 	{
 		return this.notes;
+	}
+
+	public String getCoverContentType()
+	{
+		return this.coverContentType;
+	}
+
+	public byte[] getCoverImage()
+	{
+		return this.coverImage;
 	}
 
 	public Instant getCreatedAt()

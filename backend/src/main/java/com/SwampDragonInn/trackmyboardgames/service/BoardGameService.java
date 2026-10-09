@@ -27,10 +27,12 @@ public class BoardGameService
 	private final BoardGameRepository boardGameRepository;
 	private final GamePlayRepository gamePlayRepository;
 	private final UserProfileService userProfileService;
+	private final ImageUploadChecker imageUploadChecker;
 
 	public BoardGameService(BoardGameRepository boardGameRepository, GamePlayRepository gamePlayRepository,
-			UserProfileService userProfileService)
+			UserProfileService userProfileService, ImageUploadChecker imageUploadChecker)
 	{
+		this.imageUploadChecker = imageUploadChecker;
 		this.boardGameRepository = boardGameRepository;
 		this.gamePlayRepository = gamePlayRepository;
 		this.userProfileService = userProfileService;
@@ -55,6 +57,7 @@ public class BoardGameService
 
 		return responses;
 	}
+
 	// Return one game only when it belongs to the authenticated user.
 	@Transactional
 	public BoardGameResponse findById(String subjectIssuer, String subject, UUID gameId)
@@ -73,6 +76,8 @@ public class BoardGameService
 		BoardGame game = new BoardGame(owner, request.name().trim(), request.minPlayers(),
 				request.maxPlayers(), request.bestPlayers(), request.playTimeMinutes(), request.notes());
 
+		applyCover(game, request.coverImage());
+
 		return toResponse(this.boardGameRepository.save(game), null);
 	}
 
@@ -85,6 +90,7 @@ public class BoardGameService
 		BoardGame game = findOwnedGame(owner.getId(), gameId);
 		game.updateDetails(request.name().trim(), request.minPlayers(), request.maxPlayers(),
 				request.bestPlayers(), request.playTimeMinutes(), request.notes());
+		applyCover(game, request.coverImage());
 
 		return toResponse(this.boardGameRepository.save(game), loadStats(gameId, owner.getId()));
 	}
@@ -97,15 +103,14 @@ public class BoardGameService
 		this.boardGameRepository.delete(findOwnedGame(owner.getId(), gameId));
 	}
 
-	// Get the owner's games in name order; a blank search means no filtering.
+	// Get the owner's games in name order ; a blank search means no filtering.
 	private List<BoardGame> findGamesByOwner(UUID ownerId, String search)
 	{
 		boolean hasSearch = search != null && !search.isBlank();
 
 		if (hasSearch)
 		{
-			return this.boardGameRepository.findAllByOwner_IdAndNameContainingIgnoreCaseOrderByNameAsc(
-					ownerId, search.trim());
+			return this.boardGameRepository.findAllByOwner_IdAndNameContainingIgnoreCaseOrderByNameAsc(ownerId, search.trim());
 		}
 
 		return this.boardGameRepository.findAllByOwner_IdOrderByNameAsc(ownerId);
@@ -123,6 +128,7 @@ public class BoardGameService
 
 		return statsByGameId;
 	}
+
 	// Look up one game's play totals; null means the game has never been played.
 	private PlayStats loadStats(UUID gameId, UUID ownerId)
 	{
@@ -132,9 +138,26 @@ public class BoardGameService
 	// Build the response, treating missing stats as zero plays.
 	private BoardGameResponse toResponse(BoardGame game, PlayStats stats)
 	{
-		return stats == null
-				? BoardGameResponse.from(game, 0, null)
-				: BoardGameResponse.from(game, stats.getPlayCount(), stats.getLastPlayedOn());
+		if (stats == null)
+		{
+			return BoardGameResponse.from(game, 0, null);
+		}
+
+		return BoardGameResponse.from(game, stats.getPlayCount(), stats.getLastPlayedOn());
+	}
+
+
+	// Save the submitted cover photo, or remove the cover when none was sent.
+	private void applyCover(BoardGame game, String coverImage)
+	{
+		if (coverImage == null || coverImage.isBlank())
+		{
+			game.removeCover();
+			return;
+		}
+
+		StoredImage image = this.imageUploadChecker.checkDataUrl(coverImage);
+		game.setCover(image.contentType(), image.data());
 	}
 
 	// Treat another user's game the same as a missing game so its existence is not exposed.

@@ -3,28 +3,15 @@ import { useAuth0 } from '@auth0/auth0-react'
 import { Link, useParams } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import PlayForm from '../components/PlayForm'
+import { apiAudience, apiBaseUrl, requireToken, responseError } from '../api/apiHelpers'
 import type { BoardGame, GamePlay, PlayFormValues } from '../types/boardGame'
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
-const apiAudience = import.meta.env.VITE_AUTH0_AUDIENCE || 'https://trackmyboardgames-api'
-
-// Turn a failed response into a readable message; fall back to the HTTP status if the body is not JSON.
-async function responseError(response: Response)
-{
-    const body = await response.json().catch(() => null) as { detail?: string; message?: string } | null
-    return body?.detail ?? body?.message ?? `The backend returned HTTP ${response.status}.`
-}
 
 // Small helper: GET a URL with the access token and return the parsed JSON, or throw if the backend refused.
 // Keeping this separate stops the page's load function from repeating the same fetch/check code twice.
 async function getJson<T>(url: string, accessToken: string | undefined): Promise<T>
 {
-    if (!accessToken)
-    {
-        throw new Error('You are not signed in.')
-    }
-
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
+    const token = requireToken(accessToken)
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
 
     if (!response.ok)
     {
@@ -43,15 +30,12 @@ async function sendRequest(
     body?: unknown,
 ): Promise<GamePlay | null>
 {
-    if (!accessToken)
-    {
-        throw new Error('You are not signed in.')
-    }
+    const token = requireToken(accessToken)
 
     const response = await fetch(url, {
         method,
         headers: {
-            Authorization: `Bearer ${accessToken}`,
+            Authorization: `Bearer ${token}`,
             ...(body ? { 'Content-Type': 'application/json' } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,

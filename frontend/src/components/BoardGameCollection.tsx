@@ -2,6 +2,20 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { BoardGame } from '../types/boardGame'
 
+// The grey "No cover" square shown when a game has no picture (or it is still loading).
+function CoverPlaceholder({ name }: { name: string })
+{
+    return (
+        <div
+            className="grid size-14 shrink-0 place-items-center rounded bg-base-300 text-[10px] font-semibold uppercase tracking-wide text-base-content/60"
+            role="img"
+            aria-label={`${name} cover image placeholder`}
+        >
+            No cover
+        </div>
+    )
+}
+
 type BoardGameCollectionProps = {
     games: BoardGame[]
     onEdit: (game: BoardGame) => void
@@ -48,13 +62,15 @@ function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardG
                             {filteredGames.map(game => (
                                 <tr className="transition-colors hover:bg-base-300" key={game.id}>
                                     <td>
-                                        <div
-                                            className="grid size-14 shrink-0 place-items-center rounded bg-base-300 text-[10px] font-semibold uppercase tracking-wide text-base-content/60"
-                                            role="img"
-                                            aria-label={`${game.name} cover image placeholder`}
-                                        >
-                                            No cover
-                                        </div>
+                                        {game.coverImage ? (
+                                            <img
+                                                className="size-14 shrink-0 rounded object-cover"
+                                                src={game.coverImage}
+                                                alt={`${game.name} cover`}
+                                            />
+                                        ) : (
+                                            <CoverPlaceholder name={game.name} />
+                                        )}
                                     </td>
                                     <th className="max-w-sm whitespace-normal font-semibold text-base-content" scope="row">
                                         <Link className="link link-primary font-semibold" to={`/collection/${game.id}`}>{game.name}</Link>
