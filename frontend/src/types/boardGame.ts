@@ -2,6 +2,8 @@
 export type BoardGame = {
     id: string
     name: string
+    // Optional variant label such as "2020 edition"; null when none.
+    edition: string | null
     minPlayers: number | null
     maxPlayers: number | null
     bestPlayers: string | null
@@ -35,6 +37,7 @@ export type PlayFormValues = {
 
 export type GameFormValues = {
     name: string
+    edition: string
     minPlayers: string
     maxPlayers: string
     bestPlayers: string

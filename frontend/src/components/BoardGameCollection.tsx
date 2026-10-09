@@ -105,6 +105,7 @@ function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardG
                                     </td>
                                     <th className="max-w-sm whitespace-normal font-semibold text-base-content" scope="row">
                                         <Link className="link link-primary font-semibold" to={`/collection/${game.id}`}>{game.name}</Link>
+                                        {game.edition && <p className="mt-1 text-left text-xs font-normal text-base-content/70">{game.edition}</p>}
                                         {game.notes && <p className="mt-1 text-left text-xs font-normal text-base-content/70">{game.notes}</p>}
                                     </th>
                                     <td className="whitespace-nowrap text-base-content/70">

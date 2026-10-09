@@ -96,6 +96,7 @@ function CollectionPage()
                     },
                     body: JSON.stringify({
                         name: values.name.trim(),
+                        edition: values.edition.trim() || undefined,
                         minPlayers: values.minPlayers ? Number(values.minPlayers) : undefined,
                         maxPlayers: values.maxPlayers ? Number(values.maxPlayers) : undefined,
                         bestPlayers: values.bestPlayers.trim() || undefined,

@@ -223,13 +223,13 @@ class GamePlayApiTests
 				.andExpect(jsonPath("$[?(@.id == '" + unplayedGameId + "')].playCount").value(0))
 				.andExpect(jsonPath("$[?(@.id == '" + unplayedGameId + "')].lastPlayedOn").value((Object) null));
 	}
-	// Helper: creates a game for this user and returns its id, so each test starts with a game to attach plays to.
+	// Helper: creates a game for this user and returns its id (a random edition keeps repeated games from being duplicates), so each test starts with a game to attach plays to.
 	private String createGame(String subject) throws Exception
 	{
 		MvcResult created = this.mockMvc.perform(post("/api/games")
 					.with(token(subject, "write:games"))
 					.contentType(MediaType.APPLICATION_JSON)
-					.content("{\"name\":\"Catan\"}"))
+					.content("{\"name\":\"Catan\",\"edition\":\"" + UUID.randomUUID() + "\"}"))
 				.andExpect(status().isCreated())
 				.andReturn();
 		String location = created.getResponse().getHeader("Location");

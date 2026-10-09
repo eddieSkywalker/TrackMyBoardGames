@@ -14,6 +14,7 @@ function createInitialValues(game?: BoardGame): GameFormValues
 {
     return {
         name: game?.name ?? '',
+        edition: game?.edition ?? '',
         minPlayers: game?.minPlayers?.toString() ?? '',
         maxPlayers: game?.maxPlayers?.toString() ?? '',
         bestPlayers: game?.bestPlayers ?? '',
@@ -72,6 +73,16 @@ function BoardGameForm({ initialGame, isSaving, onCancel, onSubmit }: BoardGameF
                         maxLength={200}
                         required
                         autoFocus
+                    />
+                </label>
+                <label className="grid gap-1.5 text-sm font-semibold sm:col-span-3">
+                    Edition (optional)
+                    <input
+                        className="input input-bordered w-full bg-base-100 font-normal"
+                        placeholder="e.g. 2020 edition. Use this to add a different version of a game you already have"
+                        value={values.edition}
+                        onChange={event => setValues({ ...values, edition: event.target.value })}
+                        maxLength={100}
                     />
                 </label>
                 <label className="grid gap-1.5 text-sm font-semibold">

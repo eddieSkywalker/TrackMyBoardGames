@@ -36,6 +36,10 @@ public class BoardGame
 	@Column(nullable = false, length = 200)
 	private String name;
 
+	// An optional edition or variant such as "2020 edition"; empty text means none.
+	@Column(nullable = false, length = 100)
+	private String edition;
+
 	@Column(name = "min_players")
 	private Integer minPlayers;
 
@@ -68,17 +72,18 @@ public class BoardGame
 	{
 	}
 
-	public BoardGame(AppUser owner, String name, Integer minPlayers, Integer maxPlayers,
+	public BoardGame(AppUser owner, String name, String edition, Integer minPlayers, Integer maxPlayers,
 			String bestPlayers, Integer playTimeMinutes, String notes)
 	{
 		this.owner = owner;
-		updateDetails(name, minPlayers, maxPlayers, bestPlayers, playTimeMinutes, notes);
+		updateDetails(name, edition, minPlayers, maxPlayers, bestPlayers, playTimeMinutes, notes);
 	}
 
-	public void updateDetails(String name, Integer minPlayers, Integer maxPlayers,
+	public void updateDetails(String name, String edition, Integer minPlayers, Integer maxPlayers,
 			String bestPlayers, Integer playTimeMinutes, String notes)
 	{
 		this.name = name;
+		this.edition = edition;
 		this.minPlayers = minPlayers;
 		this.maxPlayers = maxPlayers;
 		this.bestPlayers = bestPlayers;
@@ -131,6 +136,11 @@ public class BoardGame
 	public String getName()
 	{
 		return this.name;
+	}
+
+	public String getEdition()
+	{
+		return this.edition;
 	}
 
 	public Integer getMinPlayers()

@@ -12,6 +12,7 @@ import com.SwampDragonInn.trackmyboardgames.domain.BoardGame;
 public record BoardGameResponse(
 		UUID id,
 		String name,
+		String edition,
 		Integer minPlayers,
 		Integer maxPlayers,
 		String bestPlayers,
@@ -29,6 +30,7 @@ public record BoardGameResponse(
 		return new BoardGameResponse(
 				game.getId(),
 				game.getName(),
+				game.getEdition().isEmpty() ? null : game.getEdition(),
 				game.getMinPlayers(),
 				game.getMaxPlayers(),
 				game.getBestPlayers(),
