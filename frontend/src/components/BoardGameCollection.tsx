@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { BoardGame } from '../types/boardGame'
 
@@ -27,7 +27,25 @@ type BoardGameCollectionProps = {
 function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardGameCollectionProps)
 {
     const [search, setSearch] = useState('')
+    const [selectedCover, setSelectedCover] = useState<{ name: string; image: string } | null>(null)
+    const coverDialog = useRef<HTMLDialogElement>(null)
     const filteredGames = games.filter(game => game.name.toLowerCase().includes(search.trim().toLowerCase()))
+
+    // Open the native dialog when a cover is selected; the browser provides Escape and focus handling.
+    useEffect(() =>
+    {
+        const dialog = coverDialog.current
+        if (!dialog) return
+
+        if (selectedCover && !dialog.open)
+        {
+            dialog.showModal()
+        }
+        else if (!selectedCover && dialog.open)
+        {
+            dialog.close()
+        }
+    }, [selectedCover])
 
     return (
         <>
@@ -63,11 +81,24 @@ function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardG
                                 <tr className="transition-colors hover:bg-base-300" key={game.id}>
                                     <td>
                                         {game.coverImage ? (
-                                            <img
-                                                className="size-14 shrink-0 rounded object-cover"
-                                                src={game.coverImage}
-                                                alt={`${game.name} cover`}
-                                            />
+                                            <button
+                                                className="block rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                                                type="button"
+                                                aria-label={`Enlarge ${game.name} cover`}
+                                                onClick={() =>
+                                                {
+                                                    if (game.coverImage)
+                                                    {
+                                                        setSelectedCover({ name: game.name, image: game.coverImage })
+                                                    }
+                                                }}
+                                            >
+                                                <img
+                                                    className="size-14 shrink-0 rounded object-cover transition-transform hover:scale-105"
+                                                    src={game.coverImage}
+                                                    alt=""
+                                                />
+                                            </button>
                                         ) : (
                                             <CoverPlaceholder name={game.name} />
                                         )}
@@ -115,6 +146,37 @@ function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardG
                     </table>
                 </div>
             )}
+            <dialog
+                ref={coverDialog}
+                className="modal"
+                aria-label={selectedCover ? `${selectedCover.name} cover` : undefined}
+                onClose={() => setSelectedCover(null)}
+                onClick={event =>
+                {
+                    if (event.target === coverDialog.current)
+                    {
+                        coverDialog.current?.close()
+                    }
+                }}
+            >
+                {selectedCover && (
+                    <div className="modal-box relative max-h-[calc(100dvh-1rem)] w-fit max-w-4xl overflow-hidden bg-base-100 p-2 shadow-2xl">
+                        <button
+                            className="btn btn-circle btn-sm btn-ghost absolute right-4 top-4 z-10 bg-base-100/80"
+                            type="button"
+                            aria-label="Close enlarged cover"
+                            onClick={() => coverDialog.current?.close()}
+                        >
+                            ✕
+                        </button>
+                        <img
+                            className="mx-auto max-h-[calc(100dvh-2rem)] max-w-full rounded object-contain"
+                            src={selectedCover.image}
+                            alt={`${selectedCover.name} cover`}
+                        />
+                    </div>
+                )}
+            </dialog>
         </>
     )
 }
