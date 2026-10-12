@@ -150,7 +150,14 @@ function BoardGameForm({ initialGame, isSaving, onCancel, onSubmit }: BoardGameF
                     </div>
                 </div>
                 {/* A new game has no id yet, so QR codes can only be made once the game exists. */}
-                {initialGame && <QrLabelField gameId={initialGame.id} disabled={isSaving} />}
+                {initialGame && (
+                    <QrLabelField
+                        gameId={initialGame.id}
+                        gameName={values.name}
+                        edition={values.edition.trim() || null}
+                        disabled={isSaving}
+                    />
+                )}
                 </div>
                 <label className="grid gap-1.5 text-sm font-semibold sm:col-span-3">
                     Notes

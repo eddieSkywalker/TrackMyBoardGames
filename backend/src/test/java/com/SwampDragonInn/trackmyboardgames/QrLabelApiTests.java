@@ -7,7 +7,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.net.URI;
 import java.util.UUID;
+
+import javax.imageio.ImageIO;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +25,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.BinaryBitmap;
+import com.google.zxing.MultiFormatReader;
+import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.common.HybridBinarizer;
+import com.google.zxing.qrcode.QRCodeWriter;
 import com.jayway.jsonpath.JsonPath;
 
 // Verifies QR labels: creating, listing per user, scanning, revoking, and that they stay private to the owner.
@@ -30,6 +43,36 @@ class QrLabelApiTests
 
 	@Autowired
 	private MockMvc mockMvc;
+
+	// The JPG created from a real label token decodes back to a URL whose token returns the expected game.
+	@Test
+	void jpegQrCodeScansToCorrectGame() throws Exception
+	{
+		String owner = "auth0|villainous-" + UUID.randomUUID();
+		String gameId = createGame(owner, "Villainous", "Disney edition");
+		MvcResult created = this.mockMvc.perform(post("/api/games/{id}/labels", gameId)
+					.with(token(owner, "write:games")))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String code = JsonPath.<String>read(created.getResponse().getContentAsString(), "$.token");
+
+		String scanUrl = "https://trackmyboardgames.test/scan/" + code;
+		var matrix = new QRCodeWriter().encode(scanUrl, BarcodeFormat.QR_CODE, 600, 600);
+		BufferedImage qrImage = MatrixToImageWriter.toBufferedImage(matrix);
+		ByteArrayOutputStream jpegBytes = new ByteArrayOutputStream();
+		ImageIO.write(qrImage, "jpg", jpegBytes);
+
+		BufferedImage jpegImage = ImageIO.read(new ByteArrayInputStream(jpegBytes.toByteArray()));
+		BinaryBitmap scanBitmap = new BinaryBitmap(new HybridBinarizer(new BufferedImageLuminanceSource(jpegImage)));
+		String decodedUrl = new MultiFormatReader().decode(scanBitmap).getText();
+		String scannedToken = URI.create(decodedUrl).getPath().substring("/scan/".length());
+
+		this.mockMvc.perform(get("/api/scan/{token}", scannedToken).with(token(owner, "read:games")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.id").value(gameId))
+				.andExpect(jsonPath("$.name").value("Villainous"))
+				.andExpect(jsonPath("$.edition").value("Disney edition"));
+	}
 
 	// Scenario: the owner makes a label, lists it, scans it to find the game, then revokes it and scanning stops working.
 	@Test
@@ -126,10 +169,18 @@ class QrLabelApiTests
 	// Helper: creates a game for the given user and returns its id.
 	private String createGame(String subject) throws Exception
 	{
+		return createGame(subject, "Catan", null);
+	}
+
+	private String createGame(String subject, String name, String edition) throws Exception
+	{
+		String requestBody = edition == null
+				? "{\"name\":\"" + name + "\"}"
+				: "{\"name\":\"" + name + "\",\"edition\":\"" + edition + "\"}";
 		MvcResult created = this.mockMvc.perform(post("/api/games")
 					.with(token(subject, "write:games"))
 					.contentType(MediaType.APPLICATION_JSON)
-					.content("{\"name\":\"Catan\"}"))
+					.content(requestBody))
 				.andExpect(status().isCreated())
 				.andReturn();
 		String location = created.getResponse().getHeader("Location");
