@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useTheme } from '../hooks/useTheme'
 
 // Shared page frame for signed-in screens: themed background plus the DaisyUI navbar (title, Add A Play, theme toggle, profile menu).
@@ -8,6 +8,15 @@ function AppLayout({ children }: { children: ReactNode })
 {
     const { user, logout } = useAuth0()
     const [theme, setTheme] = useTheme()
+    const navigate = useNavigate()
+
+    // Close the open dropdown (DaisyUI dropdowns stay open while they hold focus), then go to the collection page
+    // and tell it what to do through the router state.
+    function runCollectionAction(action: 'add-game' | 'shelf-add' | 'shelf-remove')
+    {
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+        navigate('/collection', { state: { action } })
+    }
 
     // The avatar shows the first letter of the user's name (or email), for example 'E' for Elenor.
     const userInitial = (user?.name ?? user?.email ?? '?').charAt(0).toUpperCase()
@@ -24,7 +33,27 @@ function AppLayout({ children }: { children: ReactNode })
 
                 {/* Right: action button, dark mode toggle, and the profile menu. */}
                 <div className="navbar-end gap-1 sm:gap-2">
-                    <Link className="btn btn-primary btn-sm" to="/scan">Add A Play!</Link>
+                    {/* Create menu: a plus icon that opens Add A Play, Add A Game, and the nested Shelf Background options. */}
+                    <div className="dropdown dropdown-end">
+                        <div className="btn btn-primary btn-sm btn-circle" tabIndex={0} role="button" aria-label="Open create menu">
+                            <svg className="size-5 fill-none stroke-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" />
+                            </svg>
+                        </div>
+                        <ul className="menu dropdown-content z-10 mt-3 w-56 rounded-box bg-base-100 p-2 shadow" tabIndex={0}>
+                            <li><Link to="/scan" onClick={() => (document.activeElement as HTMLElement | null)?.blur()}>Add A Play!</Link></li>
+                            <li><button type="button" onClick={() => runCollectionAction('add-game')}>Add A Game!</button></li>
+                            <li>
+                                <details>
+                                    <summary>Shelf Background</summary>
+                                    <ul>
+                                        <li><button type="button" onClick={() => runCollectionAction('shelf-add')}>Add Shelf Background!</button></li>
+                                        <li><button type="button" onClick={() => runCollectionAction('shelf-remove')}>Remove Shelf Background</button></li>
+                                    </ul>
+                                </details>
+                            </li>
+                        </ul>
+                    </div>
                     <label className="swap swap-rotate btn btn-ghost btn-sm btn-circle text-primary" title="Toggle dark mode">
                         <input
                             type="checkbox"
