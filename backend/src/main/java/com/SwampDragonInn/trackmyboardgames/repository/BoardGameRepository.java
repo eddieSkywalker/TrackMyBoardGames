@@ -16,5 +16,11 @@ public interface BoardGameRepository extends JpaRepository<BoardGame, UUID>
 
 	List<BoardGame> findAllByOwner_IdAndNameContainingIgnoreCaseOrderByNameAsc(UUID ownerId, String name);
 
+	// True when the owner already has a game with this name and edition (compared ignoring upper/lower case).
+	boolean existsByOwner_IdAndNameIgnoreCaseAndEditionIgnoreCase(UUID ownerId, String name, String edition);
+
+	// Same check for an edit, ignoring the game being edited so saving it unchanged is allowed.
+	boolean existsByOwner_IdAndNameIgnoreCaseAndEditionIgnoreCaseAndIdNot(UUID ownerId, String name, String edition, UUID id);
+
 	Optional<BoardGame> findByIdAndOwner_Id(UUID id, UUID ownerId);
 }

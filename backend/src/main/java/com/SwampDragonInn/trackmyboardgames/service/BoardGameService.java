@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,10 +28,12 @@ public class BoardGameService
 	private final BoardGameRepository boardGameRepository;
 	private final GamePlayRepository gamePlayRepository;
 	private final UserProfileService userProfileService;
+	private final ImageUploadChecker imageUploadChecker;
 
 	public BoardGameService(BoardGameRepository boardGameRepository, GamePlayRepository gamePlayRepository,
-			UserProfileService userProfileService)
+			UserProfileService userProfileService, ImageUploadChecker imageUploadChecker)
 	{
+		this.imageUploadChecker = imageUploadChecker;
 		this.boardGameRepository = boardGameRepository;
 		this.gamePlayRepository = gamePlayRepository;
 		this.userProfileService = userProfileService;
@@ -55,6 +58,7 @@ public class BoardGameService
 
 		return responses;
 	}
+
 	// Return one game only when it belongs to the authenticated user.
 	@Transactional
 	public BoardGameResponse findById(String subjectIssuer, String subject, UUID gameId)
@@ -70,10 +74,18 @@ public class BoardGameService
 	{
 		validatePlayerRange(request);
 		AppUser owner = this.userProfileService.findOrCreate(subjectIssuer, subject);
-		BoardGame game = new BoardGame(owner, request.name().trim(), request.minPlayers(),
+		String name = request.name().trim();
+		String edition = cleanEdition(request.edition());
+		if (this.boardGameRepository.existsByOwner_IdAndNameIgnoreCaseAndEditionIgnoreCase(owner.getId(), name, edition))
+		{
+			throw duplicateGame();
+		}
+		BoardGame game = new BoardGame(owner, name, edition, request.minPlayers(),
 				request.maxPlayers(), request.bestPlayers(), request.playTimeMinutes(), request.notes());
 
-		return toResponse(this.boardGameRepository.save(game), null);
+		applyCover(game, request.coverImage());
+
+		return toResponse(saveGame(game), null);
 	}
 
 	// Validate and replace the details of an existing game owned by this user.
@@ -83,10 +95,17 @@ public class BoardGameService
 		validatePlayerRange(request);
 		AppUser owner = this.userProfileService.findOrCreate(subjectIssuer, subject);
 		BoardGame game = findOwnedGame(owner.getId(), gameId);
-		game.updateDetails(request.name().trim(), request.minPlayers(), request.maxPlayers(),
+		String name = request.name().trim();
+		String edition = cleanEdition(request.edition());
+		if (this.boardGameRepository.existsByOwner_IdAndNameIgnoreCaseAndEditionIgnoreCaseAndIdNot(owner.getId(), name, edition, gameId))
+		{
+			throw duplicateGame();
+		}
+		game.updateDetails(name, edition, request.minPlayers(), request.maxPlayers(),
 				request.bestPlayers(), request.playTimeMinutes(), request.notes());
+		applyCover(game, request.coverImage());
 
-		return toResponse(this.boardGameRepository.save(game), loadStats(gameId, owner.getId()));
+		return toResponse(saveGame(game), loadStats(gameId, owner.getId()));
 	}
 
 	// Delete the requested game only if it belongs to the authenticated user.
@@ -97,15 +116,14 @@ public class BoardGameService
 		this.boardGameRepository.delete(findOwnedGame(owner.getId(), gameId));
 	}
 
-	// Get the owner's games in name order; a blank search means no filtering.
+	// Get the owner's games in name order ; a blank search means no filtering.
 	private List<BoardGame> findGamesByOwner(UUID ownerId, String search)
 	{
 		boolean hasSearch = search != null && !search.isBlank();
 
 		if (hasSearch)
 		{
-			return this.boardGameRepository.findAllByOwner_IdAndNameContainingIgnoreCaseOrderByNameAsc(
-					ownerId, search.trim());
+			return this.boardGameRepository.findAllByOwner_IdAndNameContainingIgnoreCaseOrderByNameAsc(ownerId, search.trim());
 		}
 
 		return this.boardGameRepository.findAllByOwner_IdOrderByNameAsc(ownerId);
@@ -123,6 +141,7 @@ public class BoardGameService
 
 		return statsByGameId;
 	}
+
 	// Look up one game's play totals; null means the game has never been played.
 	private PlayStats loadStats(UUID gameId, UUID ownerId)
 	{
@@ -132,9 +151,26 @@ public class BoardGameService
 	// Build the response, treating missing stats as zero plays.
 	private BoardGameResponse toResponse(BoardGame game, PlayStats stats)
 	{
-		return stats == null
-				? BoardGameResponse.from(game, 0, null)
-				: BoardGameResponse.from(game, stats.getPlayCount(), stats.getLastPlayedOn());
+		if (stats == null)
+		{
+			return BoardGameResponse.from(game, 0, null);
+		}
+
+		return BoardGameResponse.from(game, stats.getPlayCount(), stats.getLastPlayedOn());
+	}
+
+
+	// Save the submitted cover photo, or remove the cover when none was sent.
+	private void applyCover(BoardGame game, String coverImage)
+	{
+		if (coverImage == null || coverImage.isBlank())
+		{
+			game.removeCover();
+			return;
+		}
+
+		StoredImage image = this.imageUploadChecker.checkDataUrl(coverImage);
+		game.setCover(image.contentType(), image.data());
 	}
 
 	// Treat another user's game the same as a missing game so its existence is not exposed.
@@ -142,6 +178,33 @@ public class BoardGameService
 	{
 		return this.boardGameRepository.findByIdAndOwner_Id(gameId, ownerId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+	}
+
+	// An edition is optional: missing or blank becomes empty text so "no edition" is stored the same way every time.
+	private String cleanEdition(String edition)
+	{
+		return edition == null ? "" : edition.trim();
+	}
+
+	// Save right away so the database's unique index can reject a duplicate that slipped past the earlier check
+	// (for example two quick clicks); it is reported with the same friendly 409 error.
+	private BoardGame saveGame(BoardGame game)
+	{
+		try
+		{
+			return this.boardGameRepository.saveAndFlush(game);
+		}
+		catch (DataIntegrityViolationException exception)
+		{
+			throw duplicateGame();
+		}
+	}
+
+	// The 409 Conflict error shown when the user already owns this name and edition.
+	private ResponseStatusException duplicateGame()
+	{
+		return new ResponseStatusException(HttpStatus.CONFLICT,
+				"You already have a game with this name and edition. If this is a different version, add it using the Edition field.");
 	}
 
 	// Check the relationship between optional minimum and maximum player counts.

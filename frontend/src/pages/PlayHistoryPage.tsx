@@ -3,28 +3,17 @@ import { useAuth0 } from '@auth0/auth0-react'
 import { Link, useParams } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import PlayForm from '../components/PlayForm'
+import { QRCodeSVG } from 'qrcode.react'
+import { apiAudience, apiBaseUrl, requireToken, responseError } from '../api/apiHelpers'
+import { buildScanUrl, fetchLabels, findActiveLabel, type QrLabel } from '../api/labelApi'
 import type { BoardGame, GamePlay, PlayFormValues } from '../types/boardGame'
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
-const apiAudience = import.meta.env.VITE_AUTH0_AUDIENCE || 'https://trackmyboardgames-api'
-
-// Turn a failed response into a readable message; fall back to the HTTP status if the body is not JSON.
-async function responseError(response: Response)
-{
-    const body = await response.json().catch(() => null) as { detail?: string; message?: string } | null
-    return body?.detail ?? body?.message ?? `The backend returned HTTP ${response.status}.`
-}
 
 // Small helper: GET a URL with the access token and return the parsed JSON, or throw if the backend refused.
 // Keeping this separate stops the page's load function from repeating the same fetch/check code twice.
 async function getJson<T>(url: string, accessToken: string | undefined): Promise<T>
 {
-    if (!accessToken)
-    {
-        throw new Error('You are not signed in.')
-    }
-
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
+    const token = requireToken(accessToken)
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
 
     if (!response.ok)
     {
@@ -43,15 +32,12 @@ async function sendRequest(
     body?: unknown,
 ): Promise<GamePlay | null>
 {
-    if (!accessToken)
-    {
-        throw new Error('You are not signed in.')
-    }
+    const token = requireToken(accessToken)
 
     const response = await fetch(url, {
         method,
         headers: {
-            Authorization: `Bearer ${accessToken}`,
+            Authorization: `Bearer ${token}`,
             ...(body ? { 'Content-Type': 'application/json' } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,
@@ -84,6 +70,7 @@ function PlayHistoryPage()
     // State is data React remembers; changing it re-renders the page.
     const [game, setGame] = useState<BoardGame | null>(null)
     const [plays, setPlays] = useState<GamePlay[]>([])
+    const [label, setLabel] = useState<QrLabel | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -112,16 +99,18 @@ function PlayHistoryPage()
                     authorizationParams: { audience: apiAudience, scope: 'read:games' },
                 })
 
-                // Fetch the game's details and its plays at the same time rather than one after the other.
-                const [gameResult, playsResult] = await Promise.all([
+                // Fetch the game's details, its plays and its QR label at the same time rather than one after the other.
+                const [gameResult, playsResult, labelsResult] = await Promise.all([
                     getJson<BoardGame>(`${apiBaseUrl}/api/games/${gameId}`, accessToken),
                     getJson<GamePlay[]>(`${apiBaseUrl}/api/games/${gameId}/plays`, accessToken),
+                    fetchLabels(accessToken),
                 ])
 
                 if (isCurrent)
                 {
                     setGame(gameResult)
                     setPlays(playsResult)
+                    setLabel(findActiveLabel(labelsResult, gameId))
                 }
             }
             catch (error)
@@ -251,20 +240,28 @@ function PlayHistoryPage()
         <AppLayout>
             <section className="mx-auto max-w-6xl py-10 sm:py-14">
                 {/* Heading: the game's name once loaded, plus navigation back to the collection. */}
-                <div className="mb-6 border-b border-base-300 pb-6">
-                    <p className="mb-3 text-xs font-bold tracking-[0.16em] text-secondary">PLAY HISTORY</p>
-                    <h1 className="font-serif text-4xl leading-tight text-base-content sm:text-5xl">
-                        {game?.name ?? 'Game history'}
-                    </h1>
-                    <p className="mt-3 text-sm text-base-content/70">
-                        Record of times this game was brought to the table.
-                    </p>
-                    <div className="mt-5 flex items-center gap-3">
-                        <Link className="btn btn-ghost btn-sm" to="/collection">Back to collection</Link>
-                        <button className="btn btn-primary btn-sm" type="button" onClick={openAddForm} disabled={isLoading}>
-                            Add play
-                        </button>
+                <div className="mb-6 flex flex-col gap-6 border-b border-base-300 pb-6 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p className="mb-3 text-xs font-bold tracking-[0.16em] text-secondary">PLAY HISTORY</p>
+                        <h1 className="font-serif text-4xl leading-tight text-base-content sm:text-5xl">
+                            {game?.name ?? 'Game history'}
+                        </h1>
+                        <p className="mt-3 text-sm text-base-content/70">
+                            Record of times this game was brought to the table.
+                        </p>
+                        <div className="mt-5 flex items-center gap-3">
+                            <Link className="btn btn-ghost btn-sm" to="/collection">Back to collection</Link>
+                            <button className="btn btn-primary btn-sm" type="button" onClick={openAddForm} disabled={isLoading}>
+                                Add play
+                            </button>
+                        </div>
                     </div>
+                    {/* The game's QR code, if one was generated in the edit form. The white padding is needed for scanning. */}
+                    {label && (
+                        <div className="shrink-0 self-start rounded bg-white p-3 sm:self-auto">
+                            <QRCodeSVG value={buildScanUrl(label.token)} size={160} level="M" />
+                        </div>
+                    )}
                 </div>
 
                 {/* Add/edit form. key makes React start a fresh form when switching between plays. */}

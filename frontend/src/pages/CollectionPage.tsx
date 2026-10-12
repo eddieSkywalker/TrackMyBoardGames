@@ -3,17 +3,9 @@ import { useAuth0 } from '@auth0/auth0-react'
 import AppLayout from '../components/AppLayout'
 import BoardGameForm from '../components/BoardGameForm'
 import BoardGameCollection from '../components/BoardGameCollection'
+import ShelfBackground from '../components/ShelfBackground'
+import { apiAudience, apiBaseUrl, responseError } from '../api/apiHelpers'
 import type { BoardGame, GameFormValues } from '../types/boardGame'
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
-const apiAudience = import.meta.env.VITE_AUTH0_AUDIENCE || 'https://trackmyboardgames-api'
-
-async function responseError(response: Response)
-{
-    // Prefer a useful message from Spring; fall back to the HTTP status if the body is not JSON.
-    const body = await response.json().catch(() => null) as { detail?: string; message?: string } | null
-    return body?.detail ?? body?.message ?? `The backend returned HTTP ${response.status}.`
-}
 
 // Shows the signed-in user's games and lets them add games to their own collection.
 function CollectionPage()
@@ -82,7 +74,7 @@ function CollectionPage()
     }, [getAccessTokenSilently])
 
     // Create or update a game; the backend assigns and verifies ownership from the validated token.
-    async function handleSubmit(values: GameFormValues)
+    async function handleSubmit(values: GameFormValues, coverImage: string | null)
     {
         setIsSaving(true)
         setErrorMessage(null)
@@ -93,7 +85,7 @@ function CollectionPage()
             const accessToken = await getAccessTokenSilently({
                 authorizationParams: { audience: apiAudience, scope: 'write:games' },
             })
-            // Send only game details; Spring determines the owner from the validated token.
+            // Send the game details and cover photo (null removes it); Spring determines the owner from the validated token.
             const response = await fetch(
                 editingGame ? `${apiBaseUrl}/api/games/${editingGame.id}` : `${apiBaseUrl}/api/games`,
                 {
@@ -104,11 +96,13 @@ function CollectionPage()
                     },
                     body: JSON.stringify({
                         name: values.name.trim(),
+                        edition: values.edition.trim() || undefined,
                         minPlayers: values.minPlayers ? Number(values.minPlayers) : undefined,
                         maxPlayers: values.maxPlayers ? Number(values.maxPlayers) : undefined,
                         bestPlayers: values.bestPlayers.trim() || undefined,
                         playTimeMinutes: values.playTimeMinutes ? Number(values.playTimeMinutes) : undefined,
                         notes: values.notes.trim() || undefined,
+                        coverImage,
                     }),
                 },
             )
@@ -209,6 +203,7 @@ function CollectionPage()
     return (
         <AppLayout>
             <section className="mx-auto max-w-6xl py-10 sm:py-14">
+                <ShelfBackground>
                 <div className="flex flex-col justify-between gap-6 border-b border-base-300 pb-7 sm:flex-row sm:items-end">
                     <div>
                         <p className="mb-3 text-xs font-bold tracking-[0.16em] text-secondary">YOUR COLLECTION</p>
@@ -222,6 +217,7 @@ function CollectionPage()
                         {isFormOpen ? 'Cancel' : 'Add a game'}
                     </button>
                 </div>
+                </ShelfBackground>
 
                 {errorMessage && (
                     <p className="alert alert-soft alert-error mt-5 text-sm in-data-[theme=boardgame-light]:border-[#e2b6a9] in-data-[theme=boardgame-light]:bg-[#f7e9e5] in-data-[theme=boardgame-light]:text-[#792c23]" role="alert">

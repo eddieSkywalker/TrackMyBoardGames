@@ -1,6 +1,20 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { BoardGame } from '../types/boardGame'
+
+// The grey "No cover" square shown when a game has no picture (or it is still loading).
+function CoverPlaceholder({ name }: { name: string })
+{
+    return (
+        <div
+            className="grid size-14 shrink-0 place-items-center rounded bg-base-300 text-[10px] font-semibold uppercase tracking-wide text-base-content/60"
+            role="img"
+            aria-label={`${name} cover image placeholder`}
+        >
+            No cover
+        </div>
+    )
+}
 
 type BoardGameCollectionProps = {
     games: BoardGame[]
@@ -13,7 +27,25 @@ type BoardGameCollectionProps = {
 function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardGameCollectionProps)
 {
     const [search, setSearch] = useState('')
+    const [selectedCover, setSelectedCover] = useState<{ name: string; image: string } | null>(null)
+    const coverDialog = useRef<HTMLDialogElement>(null)
     const filteredGames = games.filter(game => game.name.toLowerCase().includes(search.trim().toLowerCase()))
+
+    // Open the native dialog when a cover is selected; the browser provides Escape and focus handling.
+    useEffect(() =>
+    {
+        const dialog = coverDialog.current
+        if (!dialog) return
+
+        if (selectedCover && !dialog.open)
+        {
+            dialog.showModal()
+        }
+        else if (!selectedCover && dialog.open)
+        {
+            dialog.close()
+        }
+    }, [selectedCover])
 
     return (
         <>
@@ -48,16 +80,32 @@ function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardG
                             {filteredGames.map(game => (
                                 <tr className="transition-colors hover:bg-base-300" key={game.id}>
                                     <td>
-                                        <div
-                                            className="grid size-14 shrink-0 place-items-center rounded bg-base-300 text-[10px] font-semibold uppercase tracking-wide text-base-content/60"
-                                            role="img"
-                                            aria-label={`${game.name} cover image placeholder`}
-                                        >
-                                            No cover
-                                        </div>
+                                        {game.coverImage ? (
+                                            <button
+                                                className="block rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                                                type="button"
+                                                aria-label={`Enlarge ${game.name} cover`}
+                                                onClick={() =>
+                                                {
+                                                    if (game.coverImage)
+                                                    {
+                                                        setSelectedCover({ name: game.name, image: game.coverImage })
+                                                    }
+                                                }}
+                                            >
+                                                <img
+                                                    className="size-14 shrink-0 rounded object-cover transition-transform hover:scale-105"
+                                                    src={game.coverImage}
+                                                    alt=""
+                                                />
+                                            </button>
+                                        ) : (
+                                            <CoverPlaceholder name={game.name} />
+                                        )}
                                     </td>
                                     <th className="max-w-sm whitespace-normal font-semibold text-base-content" scope="row">
                                         <Link className="link link-primary font-semibold" to={`/collection/${game.id}`}>{game.name}</Link>
+                                        {game.edition && <p className="mt-1 text-left text-xs font-normal text-base-content/70">{game.edition}</p>}
                                         {game.notes && <p className="mt-1 text-left text-xs font-normal text-base-content/70">{game.notes}</p>}
                                     </th>
                                     <td className="whitespace-nowrap text-base-content/70">
@@ -99,6 +147,37 @@ function BoardGameCollection({ games, onEdit, onDelete, deletingGameId }: BoardG
                     </table>
                 </div>
             )}
+            <dialog
+                ref={coverDialog}
+                className="modal"
+                aria-label={selectedCover ? `${selectedCover.name} cover` : undefined}
+                onClose={() => setSelectedCover(null)}
+                onClick={event =>
+                {
+                    if (event.target === coverDialog.current)
+                    {
+                        coverDialog.current?.close()
+                    }
+                }}
+            >
+                {selectedCover && (
+                    <div className="modal-box relative max-h-[calc(100dvh-1rem)] w-fit max-w-4xl overflow-hidden bg-base-100 p-2 shadow-2xl">
+                        <button
+                            className="btn btn-circle btn-sm btn-ghost absolute right-4 top-4 z-10 bg-base-100/80"
+                            type="button"
+                            aria-label="Close enlarged cover"
+                            onClick={() => coverDialog.current?.close()}
+                        >
+                            ✕
+                        </button>
+                        <img
+                            className="mx-auto max-h-[calc(100dvh-2rem)] max-w-full rounded object-contain"
+                            src={selectedCover.image}
+                            alt={`${selectedCover.name} cover`}
+                        />
+                    </div>
+                )}
+            </dialog>
         </>
     )
 }

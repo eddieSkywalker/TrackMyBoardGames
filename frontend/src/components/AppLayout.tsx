@@ -17,6 +17,7 @@ function AppLayout({ children }: { children: ReactNode })
                     <span>Track My Board Games</span>
                 </Link>
                 <div className="flex items-center gap-3">
+                    <Link className="btn btn-ghost btn-sm text-primary" to="/scan">Scan</Link>
                     <p className="hidden text-sm text-base-content/70 sm:block">Welcome, {user?.name ?? user?.email ?? 'player'}</p>
                     <label className="swap swap-rotate btn btn-ghost btn-sm btn-circle text-primary" title="Toggle dark mode">
                         <input

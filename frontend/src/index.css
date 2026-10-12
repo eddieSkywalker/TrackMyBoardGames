@@ -110,3 +110,31 @@ a {
     padding: 0;
   }
 }
+
+.qr-print-area {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 10mm;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .qr-print-area,
+  .qr-print-area * {
+    visibility: visible !important;
+  }
+
+  .qr-print-area {
+    position: fixed;
+    inset: 0;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+  }
+}

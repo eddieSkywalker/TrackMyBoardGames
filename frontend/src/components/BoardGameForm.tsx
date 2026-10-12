@@ -1,17 +1,21 @@
 import { useState, type FormEvent } from 'react'
 import type { BoardGame, GameFormValues } from '../types/boardGame'
+import { blobToDataUrl } from '../api/imageApi'
+import ImagePicker from './ImagePicker'
+import QrLabelField from './QrLabelField'
 
 type BoardGameFormProps = {
     initialGame?: BoardGame
     isSaving: boolean
     onCancel: () => void
-    onSubmit: (values: GameFormValues) => Promise<void>
+    onSubmit: (values: GameFormValues, coverImage: string | null) => Promise<void>
 }
 
 function createInitialValues(game?: BoardGame): GameFormValues
 {
     return {
         name: game?.name ?? '',
+        edition: game?.edition ?? '',
         minPlayers: game?.minPlayers?.toString() ?? '',
         maxPlayers: game?.maxPlayers?.toString() ?? '',
         bestPlayers: game?.bestPlayers ?? '',
@@ -26,10 +30,34 @@ function BoardGameForm({ initialGame, isSaving, onCancel, onSubmit }: BoardGameF
     const [values, setValues] = useState<GameFormValues>(() => createInitialValues(initialGame))
     const isEditing = Boolean(initialGame)
 
+    // The cover is held as text (a "data URL") so it can be shown right away and sent along with the game.
+    // Nothing is saved until the form is submitted, so Cancel leaves the old cover alone.
+    const [cover, setCover] = useState<string | null>(initialGame?.coverImage ?? null)
+
+    async function handleCoverPicked(image: Blob)
+    {
+        setCover(await blobToDataUrl(image))
+    }
+
     async function handleSubmit(event: FormEvent<HTMLFormElement>)
     {
         event.preventDefault()
-        await onSubmit(values)
+        await onSubmit(values, cover)
+    }
+
+    // The preview shows the chosen cover, or a placeholder when there is none.
+    function renderCoverPreview()
+    {
+        if (cover)
+        {
+            return <img className="size-24 rounded object-cover" src={cover} alt="Cover preview" />
+        }
+
+        return (
+            <div className="grid size-24 place-items-center rounded bg-base-300 text-xs font-semibold uppercase text-base-content/60">
+                No cover
+            </div>
+        )
     }
 
     return (
@@ -46,6 +74,16 @@ function BoardGameForm({ initialGame, isSaving, onCancel, onSubmit }: BoardGameF
                         maxLength={200}
                         required
                         autoFocus
+                    />
+                </label>
+                <label className="grid gap-1.5 text-sm font-semibold sm:col-span-3">
+                    Edition (optional)
+                    <input
+                        className="input input-bordered w-full bg-base-100 font-normal"
+                        placeholder="e.g. 2020 edition. Use this to add a different version of a game you already have"
+                        value={values.edition}
+                        onChange={event => setValues({ ...values, edition: event.target.value })}
+                        maxLength={100}
                     />
                 </label>
                 <label className="grid gap-1.5 text-sm font-semibold">
@@ -91,6 +129,36 @@ function BoardGameForm({ initialGame, isSaving, onCancel, onSubmit }: BoardGameF
                         onChange={event => setValues({ ...values, playTimeMinutes: event.target.value })}
                     />
                 </label>
+                <div className="flex flex-wrap gap-x-12 gap-y-5 sm:col-span-3">
+                <div className="grid gap-2">
+                    <span className="text-sm font-semibold">Cover photo</span>
+                    <div className="flex flex-wrap items-center gap-4">
+                        {renderCoverPreview()}
+                        <div className="grid gap-2">
+                            <ImagePicker maxSize={500} disabled={isSaving} onPick={handleCoverPicked} />
+                            {cover && (
+                                <button
+                                    className="btn btn-ghost btn-sm w-fit"
+                                    type="button"
+                                    onClick={() => setCover(null)}
+                                    disabled={isSaving}
+                                >
+                                    Remove photo
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                {/* A new game has no id yet, so QR codes can only be made once the game exists. */}
+                {initialGame && (
+                    <QrLabelField
+                        gameId={initialGame.id}
+                        gameName={values.name}
+                        edition={values.edition.trim() || null}
+                        disabled={isSaving}
+                    />
+                )}
+                </div>
                 <label className="grid gap-1.5 text-sm font-semibold sm:col-span-3">
                     Notes
                     <textarea

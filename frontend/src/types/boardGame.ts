@@ -2,6 +2,8 @@
 export type BoardGame = {
     id: string
     name: string
+    // Optional variant label such as "2020 edition"; null when none.
+    edition: string | null
     minPlayers: number | null
     maxPlayers: number | null
     bestPlayers: string | null
@@ -9,6 +11,8 @@ export type BoardGame = {
     notes: string | null
     playCount: number
     lastPlayedOn: string | null
+    // The cover photo written as text ("data:image/jpeg;base64,..."), ready to use as an <img> src; null if none.
+    coverImage: string | null
     createdAt: string
     updatedAt: string
 }
@@ -33,6 +37,7 @@ export type PlayFormValues = {
 
 export type GameFormValues = {
     name: string
+    edition: string
     minPlayers: string
     maxPlayers: string
     bestPlayers: string
