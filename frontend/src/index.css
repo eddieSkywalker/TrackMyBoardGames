@@ -94,8 +94,12 @@ body {
 }
 
 button,
-a {
+a,
+label,
+summary,
+[role='button'] {
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 #root {
