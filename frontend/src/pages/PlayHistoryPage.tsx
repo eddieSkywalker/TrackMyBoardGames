@@ -243,7 +243,7 @@ function PlayHistoryPage()
                 <div className="mb-6 flex flex-col gap-6 border-b border-base-300 pb-6 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <p className="mb-3 text-xs font-bold tracking-[0.16em] text-secondary">PLAY HISTORY</p>
-                        <h1 className="font-serif text-4xl leading-tight text-base-content sm:text-5xl">
+                        <h1 className="font-serif text-3xl leading-tight break-words text-base-content sm:text-5xl">
                             {game?.name ?? 'Game history'}
                         </h1>
                         <p className="mt-3 text-sm text-base-content/70">

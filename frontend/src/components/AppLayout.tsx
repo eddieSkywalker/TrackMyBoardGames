@@ -22,17 +22,17 @@ function AppLayout({ children }: { children: ReactNode })
     const userInitial = (user?.name ?? user?.email ?? '?').charAt(0).toUpperCase()
 
     return (
-        <main data-theme={theme} className="min-h-screen w-full bg-base-200 px-4 py-5 text-base-content sm:px-8 sm:py-8">
+        <main data-theme={theme} className="min-h-screen min-w-0 w-full bg-base-200 px-4 py-5 text-base-content sm:px-8 sm:py-8">
             <header className="navbar mx-auto max-w-6xl border-b border-base-300 px-0 pb-4">
                 {/* Left: the app title, which takes the user back to the collection (the home page for now). */}
-                <div className="navbar-start min-w-0">
-                    <Link className="btn btn-ghost px-2 text-base font-bold text-primary sm:text-lg" to="/collection">
+                <div className="navbar-start min-w-0 w-auto flex-1">
+                    <Link className="btn btn-ghost h-auto min-h-10 max-w-full px-2 py-2 text-base font-bold whitespace-normal text-primary sm:text-lg" to="/collection">
                         Track My Board Games
                     </Link>
                 </div>
 
                 {/* Right: action button, dark mode toggle, and the profile menu. */}
-                <div className="navbar-end gap-1 sm:gap-2">
+                <div className="navbar-end w-auto shrink-0 gap-1 sm:gap-2">
                     {/* Create menu: a plus icon that opens Add A Play, Add A Game, and the nested Shelf Background options. */}
                     <div className="dropdown dropdown-end">
                         <div className="btn btn-primary btn-sm btn-circle" tabIndex={0} role="button" aria-label="Open create menu">

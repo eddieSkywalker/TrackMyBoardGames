@@ -100,6 +100,8 @@ a {
 
 #root {
   display: grid;
+  /* Keep wide tables inside their scroll containers instead of widening the page. */
+  grid-template-columns: minmax(0, 1fr);
   min-height: 100svh;
   place-items: center;
   padding: 32px;
