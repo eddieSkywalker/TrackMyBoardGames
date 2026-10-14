@@ -2,6 +2,7 @@ package com.SwampDragonInn.trackmyboardgames;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -40,12 +41,13 @@ public class SecurityConfig
 				.build();
 	}
 
-	// Allow browser requests from the local React development server to reach this API.
+	// Each environment supplies the exact frontend origins allowed to call this API.
 	@Bean
-	CorsConfigurationSource corsConfigurationSource()
+	CorsConfigurationSource corsConfigurationSource(
+			@Value("${app.cors.allowed-origins}") List<String> allowedOrigins)
 	{
 		CorsConfiguration configuration = new CorsConfiguration();
-		configuration.setAllowedOrigins(List.of("http://localhost:5173"));
+		configuration.setAllowedOrigins(allowedOrigins);
 		configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 		configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
 
