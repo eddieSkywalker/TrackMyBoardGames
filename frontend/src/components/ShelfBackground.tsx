@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuth0 } from '@auth0/auth0-react'
 import { apiAudience, apiBaseUrl, responseError } from '../api/apiHelpers'
 import { blobToDataUrl } from '../api/imageApi'
@@ -17,6 +18,8 @@ function ShelfBackground({ children }: ShelfBackgroundProps)
     const [backgroundImage, setBackgroundImage] = useState<string | null>(null)
     const [isBusy, setIsBusy] = useState(false)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
+    const [isPickerOpen, setIsPickerOpen] = useState(false)
+    const location = useLocation()
 
     // useEffect runs after the component first appears, and again if the token function changes.
     // It loads the saved background once, rather than making a request during every render.
@@ -157,6 +160,25 @@ function ShelfBackground({ children }: ShelfBackgroundProps)
         }
     }
 
+    // The navbar menu navigates here with an action in the router state; location.key changes on every navigation.
+    // Setting state while rendering (guarded by the handled key) is React's way to react to a changed value without an effect.
+    // CollectionPage clears the router state afterwards, so refreshing doesn't repeat the action.
+    const navAction = (location.state as { action?: string } | null)?.action
+    const [handledKey, setHandledKey] = useState('')
+    if (navAction === 'shelf-add' && handledKey !== location.key)
+    {
+        setHandledKey(location.key)
+        setIsPickerOpen(true)
+    }
+
+    useEffect(() =>
+    {
+        // Starting on a later tick keeps React from treating the busy-state update as a synchronous effect update.
+        if (navAction === 'shelf-remove') void Promise.resolve().then(handleRemove)
+        // Only a new navigation should trigger this; handleRemove is re-created every render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [navAction, location.key])
+
     return (
         <div>
             <div className="relative overflow-hidden rounded-box">
@@ -170,18 +192,24 @@ function ShelfBackground({ children }: ShelfBackgroundProps)
                 <div className={backgroundImage ? 'relative px-6 pt-6' : 'relative'}>{children}</div>
             </div>
 
-            <details className="mt-3 text-sm">
-                <summary className="cursor-pointer text-base-content/70">Shelf background</summary>
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <ImagePicker maxSize={1600} disabled={isBusy} onPick={handlePicked} />
-                    {backgroundImage && (
-                        <button className="btn btn-ghost btn-sm" type="button" onClick={handleRemove} disabled={isBusy}>
-                            Remove background
-                        </button>
-                    )}
+            {/* The navbar's Shelf Background > Add option opens this picker; Remove runs straight away. */}
+            {isPickerOpen && (
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                    <ImagePicker
+                        maxSize={1600}
+                        disabled={isBusy}
+                        onPick={async image =>
+                        {
+                            await handlePicked(image)
+                            setIsPickerOpen(false)
+                        }}
+                    />
+                    <button className="btn btn-ghost btn-sm" type="button" onClick={() => setIsPickerOpen(false)}>
+                        Cancel
+                    </button>
                 </div>
-                {errorMessage && <p className="mt-2 text-xs text-error" role="alert">{errorMessage}</p>}
-            </details>
+            )}
+            {errorMessage && <p className="mt-2 text-xs text-error" role="alert">{errorMessage}</p>}
         </div>
     )
 }

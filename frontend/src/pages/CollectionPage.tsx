@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import BoardGameForm from '../components/BoardGameForm'
 import BoardGameCollection from '../components/BoardGameCollection'
@@ -19,6 +20,8 @@ function CollectionPage()
     const [deletingGameId, setDeletingGameId] = useState<string | null>(null)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
+    const location = useLocation()
+    const navigate = useNavigate()
 
     // Load this user's games with the read:games permission when the page opens.
     useEffect(() =>
@@ -199,23 +202,31 @@ function CollectionPage()
 
     const isFormOpen = isAddFormOpen || editingGame !== null
 
+    // The navbar's "Add A Game!" option navigates here with an action in the router state.
+    // Setting state while rendering (guarded by the handled key) is React's way to react to a changed value without an effect.
+    const navAction = (location.state as { action?: string } | null)?.action
+    const [handledKey, setHandledKey] = useState('')
+    if (navAction === 'add-game' && handledKey !== location.key)
+    {
+        setHandledKey(location.key)
+        openAddForm()
+    }
+
+    // Clear the action so refreshing the page doesn't reopen the form.
+    useEffect(() =>
+    {
+        if (navAction) navigate(location.pathname, { replace: true, state: null })
+    }, [navAction, navigate, location.pathname])
     // Render the form and the collection's loading, empty, error, and game-list states.
     return (
         <AppLayout>
-            <section className="mx-auto max-w-6xl py-10 sm:py-14">
+            <section className="mx-auto max-w-6xl py-10 sm:py-7">
                 <ShelfBackground>
                 <div className="flex flex-col justify-between gap-6 border-b border-base-300 pb-7 sm:flex-row sm:items-end">
                     <div>
                         <p className="mb-3 text-xs font-bold tracking-[0.16em] text-secondary">YOUR COLLECTION</p>
                         <h1 className="font-serif text-4xl leading-tight text-base-content sm:text-5xl">Game shelf</h1>
                     </div>
-                    <button
-                        className="btn btn-primary w-fit px-5"
-                        type="button"
-                        onClick={isFormOpen ? closeForm : openAddForm}
-                    >
-                        {isFormOpen ? 'Cancel' : 'Add a game'}
-                    </button>
                 </div>
                 </ShelfBackground>
 
