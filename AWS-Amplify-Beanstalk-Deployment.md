@@ -243,12 +243,44 @@ Do not upload your local credentials file.
 ### 2. Verify database access
 
 - The database must exist before application startup.
-- Ensure the backend can reach it through the selected VPC/networking.
-- Allow PostgreSQL from the backend's security group, not from the entire internet.
+- For RDS, ensure the backend can reach it through the selected VPC/networking and allow PostgreSQL from the backend's security group.
+- For Neon, the backend needs outbound connectivity to the Neon endpoint on port 5432. No inbound database rule on the Beanstalk instance is needed.
 - Follow the database service's recommended TLS settings.
 - Use separate Dev and Production data.
 
 Flyway runs pending migrations during application startup. Back up Production and review migration compatibility before deployment.
+
+#### Current Neon development setup
+
+- Project: `TrackMyBoardGames` (`billowing-leaf-68750763`).
+- Region: AWS US West (Oregon), `aws-us-west-2`.
+- Branch: `development` (renamed from the initial unused `production` branch).
+- Database: `trackmyboardgames`.
+- Neon Auth is disabled; the app continues using Auth0.
+- The existing PostgreSQL JDBC driver, JPA, and Flyway remain unchanged.
+- The direct endpoint is used because Flyway migrations run on application startup.
+
+Local credentials are stored in the ignored `backend/config/application-neon.properties` file, outside application resources. They are not included in the JAR or React build.
+
+Local PostgreSQL remains the default. To opt into Neon, run from the backend directory:
+
+```powershell
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=neon"
+```
+
+Use Java 25 as described below. The local Neon profile allows the pool to shrink to zero idle connections and limits it to five connections; free-plan usage and wake-up latency still need monitoring.
+
+To configure Beanstalk, use Neon's Connect panel for the `development` branch and set:
+
+```text
+DB_URL=jdbc:postgresql://<direct-neon-host>:5432/trackmyboardgames?sslmode=require
+DB_USERNAME=<neon-database-role>
+DB_PASSWORD=<secret or SecureString reference>
+```
+
+Do not upload the local credential file or put these credentials into Amplify. Do not use a credential-bearing `postgresql://` URL as the JDBC URL.
+
+Project-level Neon agent skills are installed under `.agents/skills`, with provenance in `skills-lock.json`. The VS Code MCP configuration in `.vscode/mcp.json` uses OAuth and is scoped to this project; it contains no API key. Authorize the server in VS Code on first use. These are development tools, not runtime dependencies.
 
 ### 3. Plan HTTPS
 
