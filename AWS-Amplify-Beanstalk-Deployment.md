@@ -195,6 +195,41 @@ Save the Auth0 settings. Add equivalent Production/custom-domain addresses when 
 
 The Auth0 application should be a **Single Page Application**, using the SDK's Authorization Code Flow with PKCE, not a client secret.
 
+#### Safari-compatible session restoration
+
+The React provider requests the API audience and both `read:games` and
+`write:games` during interactive login. Existing page-level requests use those
+permissions for collection, shelf images, play history, scanning, and QR labels;
+backend permission enforcement is unchanged.
+
+Before deploying the refresh-token configuration:
+
+1. In **Auth0 -> Applications -> APIs**, select the API identified by
+   `https://trackmyboardgames-api`. Under **Settings**, enable **Allow Offline Access**.
+2. In **Applications -> Applications**, select the SPA. Under **Settings**, enable
+   **Refresh Token Rotation**. Confirm **Advanced Settings -> Grant Types** includes
+   **Refresh Token**, then save. Set appropriate refresh-token idle and maximum
+   expiration policies rather than assuming sessions last indefinitely.
+3. Keep callback/logout URLs and Allowed Web Origins configured for each frontend,
+   including `https://www.swampdragoninn.casa/` for callback/logout and
+   `https://www.swampdragoninn.casa` for Web Origins.
+4. Build and deploy React. Existing users should sign out and sign in again to
+   obtain refresh tokens and the newly requested permissions.
+
+The SDK automatically adds `offline_access` when `useRefreshTokens` is enabled.
+It persists its token cache in local storage so Safari can restore sessions after
+reload without requiring third-party Auth0 cookies. Hidden-iframe fallback is
+disabled. Local storage increases token exposure if an XSS vulnerability occurs;
+do not log tokens, insert untrusted scripts, or treat storage as a secure vault.
+Expired or revoked sessions still require interactive sign-in; existing login
+and page error displays surface authentication errors.
+
+Verify on Safari with cross-site tracking protection left enabled: sign in,
+load the collection, reload, and test a write operation. Check later token renewal
+uses `/oauth/token` with the refresh-token grant, not iframe `/authorize` requests.
+Also verify sign-out and desktop/local development. Live rotation and Safari
+behavior require testing against the configured Auth0 tenant, not just a build.
+
 ### 6. Deploy and verify
 
 - Confirm the Amplify build succeeds and publishes `dist`.
