@@ -295,6 +295,73 @@ Choose one:
 
 A Route 53 record alone does not provide HTTPS. Use a domain you control for the API certificate and configure DNS to the environment.
 
+#### Current Dev: single-instance Java SE with Let's Encrypt
+
+The backend bundle now includes DNS-validated HTTPS for `api-dev.swampdragoninn.casa`.
+Keep the existing Route 53 CNAME pointing to the Dev Beanstalk environment. No load
+balancer or ACM certificate is required.
+
+Before uploading this bundle:
+
+1. On the environment's EC2 instance role, allow `route53:ListHostedZones` on `*`
+   and `route53:GetChange` on `arn:aws:route53:::change/*`.
+2. Allow `route53:ChangeResourceRecordSets` on
+   `arn:aws:route53:::hostedzone/Z010213337Y1R1IFV90JX`, restricted with
+   `ForAllValues:StringEquals` to record type `TXT` and normalized record name
+   `_acme-challenge.api-dev.swampdragoninn.casa`.
+   Do not add access keys; Certbot uses the instance role.
+3. Add the plain-text Beanstalk environment property `LETSENCRYPT_EMAIL` with your
+   certificate account contact email. Keep `SERVER_PORT=5000` and, if `PORT` is
+   explicitly configured, keep it `5000` too. Preserve the DB, Auth0, and CORS settings.
+4. If you previously added port 443 manually to the instance security group,
+   remove only that manually added HTTPS rule immediately before deploying:
+   `.ebextensions/https.config` now owns the rule. Leave HTTP and other rules intact.
+   An identical pre-existing rule can cause CloudFormation deployment to fail.
+
+From `backend`, using Java 25:
+
+```powershell
+.\mvnw.cmd clean package
+.\package-beanstalk.ps1
+```
+
+Upload `backend/target/trackmyboardgames-beanstalk.zip` through Beanstalk's
+**Upload and deploy**, not the standalone JAR. The packaging script includes only
+the executable JAR (as `application.jar`), `Procfile`, `.platform`, and `.ebextensions`.
+It excludes local configuration, credentials, source files, and build-time tools.
+It writes deployment text files as UTF-8 without a BOM and with Unix LF line
+endings, including helper scripts that Beanstalk does not automatically normalize.
+Future deployments must also use this ZIP to retain HTTPS setup.
+
+The prebuild hook installs pinned Certbot packages in a dedicated Python 3.11
+virtual environment and obtains the certificate before Beanstalk configures Nginx.
+Configuration deployments run the same setup. HTTP remains available; the TLS
+server uses Beanstalk's existing upstream mappings and health logging.
+Certificate keys remain on the instance under `/etc/letsencrypt`, not in Git.
+A root systemd timer checks renewal twice daily, reloads Nginx after renewal,
+and records failures in the system journal. Monitor renewal failures; Let's
+Encrypt email is not a substitute for renewal monitoring.
+Instance replacements obtain a new certificate automatically, provided DNS,
+IAM, and outbound package/ACME/Route 53 access are available. Frequent replacements
+can hit Let's Encrypt issuance limits; this is a low-traffic Dev setup, not a
+high-availability or shared-certificate solution.
+
+After deployment:
+
+1. Confirm Beanstalk health returns to OK.
+2. Open `https://api-dev.swampdragoninn.casa/api/health` and verify the certificate
+   is trusted and the JSON reports `status: ok`.
+3. Set Amplify `VITE_API_BASE_URL=https://api-dev.swampdragoninn.casa` and rebuild.
+   Keep backend CORS allowing the actual Amplify frontend origin.
+4. When instance access is available, check
+   `systemctl status trackmyboardgames-certbot.timer` and test renewal with
+   `/opt/trackmyboardgames-certbot/bin/certbot renew --dry-run`.
+
+If deployment fails, inspect `/var/log/eb-engine.log` and
+`/var/log/letsencrypt/letsencrypt.log`; do not disable TLS verification or expose
+the Java port to work around errors. This configuration has to be verified on AWS;
+local packaging checks do not prove certificate issuance or renewal.
+
 ### 4. Health checks and capacity
 
 - Configure `/api/health` as the health-check path where supported.
