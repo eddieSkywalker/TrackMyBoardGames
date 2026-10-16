@@ -1,2 +1,5 @@
 /mvnw text eol=lf
 *.cmd text eol=crlf
+.platform/** text eol=lf
+.ebextensions/** text eol=lf
+Procfile text eol=lf

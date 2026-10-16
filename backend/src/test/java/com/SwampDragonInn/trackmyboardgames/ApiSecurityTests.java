@@ -3,9 +3,11 @@ package com.SwampDragonInn.trackmyboardgames;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -24,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.SwampDragonInn.trackmyboardgames.repository.AppUserRepository;
 
 // Checks API authentication, scope requirements, profile reuse, and separation between users' games.
-@SpringBootTest
+@SpringBootTest(properties = "app.cors.allowed-origins=http://localhost:5173,https://development.dag28nzl054yt.amplifyapp.com")
 @AutoConfigureMockMvc
 @Transactional
 class ApiSecurityTests
@@ -35,6 +37,43 @@ class ApiSecurityTests
 
 	@Autowired
 	private AppUserRepository appUserRepository;
+
+	@Test
+	void corsPreflightAcceptsConfiguredFrontendOrigins() throws Exception
+	{
+		for (String origin : new String[] {
+				"http://localhost:5173",
+				"https://development.dag28nzl054yt.amplifyapp.com" })
+		{
+			this.mockMvc.perform(options("/api/games")
+						.header("Origin", origin)
+						.header("Access-Control-Request-Method", "POST")
+						.header("Access-Control-Request-Headers", "Authorization,Content-Type"))
+					.andExpect(status().isOk())
+					.andExpect(header().string("Access-Control-Allow-Origin", origin))
+					.andExpect(header().doesNotExist("Access-Control-Allow-Credentials"));
+		}
+	}
+
+	@Test
+	void corsPreflightRejectsUnconfiguredOrigins() throws Exception
+	{
+		this.mockMvc.perform(options("/api/games")
+					.header("Origin", "https://untrusted.example")
+					.header("Access-Control-Request-Method", "POST"))
+				.andExpect(status().isForbidden())
+				.andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+	}
+
+	@Test
+	void allowedFrontendStillRequiresAuthentication() throws Exception
+	{
+		this.mockMvc.perform(get("/api/games")
+					.header("Origin", "https://development.dag28nzl054yt.amplifyapp.com"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(header().string("Access-Control-Allow-Origin",
+						"https://development.dag28nzl054yt.amplifyapp.com"));
+	}
 
 	@Test
 	void healthEndpointIsPublic() throws Exception

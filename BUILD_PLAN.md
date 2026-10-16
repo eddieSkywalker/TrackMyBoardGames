@@ -21,10 +21,23 @@ Build a personal board-game library and play tracker. Each user manages a privat
 | **0.3** | Personal game library | Authenticated users can create, view, edit, delete, search, and list their own board games. A game has a name and useful optional details such as player count, play time, and notes. Verify users cannot read or change another user's games. |
 | **0.4** | Play history | Users can record, view, edit, and delete a play for one of their games. Store at least the played date; keep duration, players, and notes optional. Show each game's play count and most recent play. |
 | **0.5** | QR labels & Camera and photo scanning | Generate a unique QR code per game and provide a print-friendly label. Scanning resolves only games the signed-in user is authorized to access. Allow a code to be revoked and regenerated. <br><br>On a scan screen, users can scan a QR code with a supported device's camera or select a photo. A successful scan identifies the game and asks for confirmation before recording a play. Handle denied camera access, invalid codes, and unknown or revoked codes with supported testing. |
-| **0.7** | Library insights | Add useful visual summaries such as plays over time, most/least played games, and games not played recently. Support date filters. Keep metrics consistent with the play-history records. |
+| **0.6** | UIEnhancementOne - mobile UI pass | Improve mobile navigation with a bottom dock and reorganized add/actions menu; simplify the mobile header; improve game-cover and play-history presentation; contain wide-table scrolling and prevent page-level horizontal overflow on narrow screens. Preserve desktop navigation and core collection workflows. |
+| **0.7** | Cloud connectivity and hosting configuration | Complete the hosting, connectivity, certificate automation, and verification criteria listed below. |
+| **0.8** | Library insights | Add useful visual summaries such as plays over time, most/least played games, and games not played recently. Support date filters. Keep metrics consistent with the play-history records. |
 | **1.0** | Stable initial release | Complete responsive and accessible core workflows; tests show useful validation and error states; verify authorization, migrations, and backup/restore procedures; document configuration and deployment. Tag the verified release `v1.0.0`. |
 
 **QR scope decision:** Start with QR codes rather than inventing a new barcode format as a baseline. R&D needed to determine best solution for scanning mechanism.
+
+### 0.7 completion criteria - Cloud connectivity and hosting configuration
+
+- **Hosting:** Support an Amplify-hosted React frontend and a Java SE Beanstalk backend connected to the Neon development PostgreSQL database.
+- **Connectivity and authentication:** Configure environment-based API URLs, JDBC credentials, CORS, and Auth0 settings.
+- **Database schema:** Apply Flyway migrations to the hosted database.
+- **Custom domain and HTTPS:** Add Route 53 custom-domain routing and single-instance Let's Encrypt HTTPS with scoped IAM permissions.
+- **Repeatable deployment:** Automate certificate renewal and package the JAR plus configuration in a repeatable deployment ZIP.
+- **Verification:** Verify trusted HTTPS, renewal, and authenticated frontend-to-backend workflows before considering the milestone complete.
+
+- See [the hosting flow overview](APP-HOSTING-FLOW.md) for the architecture and service responsibilities, and [the deployment guide](AWS-Amplify-Beanstalk-Deployment.md) for build, configuration, and deployment steps.
 
 ## Build Loop
 
@@ -46,8 +59,10 @@ flowchart LR
     V02 --> V03["0.3 Game library"]
     V03 --> V04["0.4 Play history"]
     V04 --> V05["0.5 QR labels & Scanning"]
-    V05 --> V06["0.7 Insights"]
-    V06 --> V07["1.0 Stable release"]
+    V05 --> V06["0.6 UIEnhancementOne"]
+    V06 --> V07["0.7 Cloud connectivity and hosting"]
+    V07 --> V08["0.8 Insights"]
+    V08 --> V10["1.0 Stable release"]
 ```
 
 ## Initial Technical Guardrails
