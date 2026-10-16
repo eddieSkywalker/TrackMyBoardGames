@@ -251,7 +251,7 @@ function CollectionPage()
                     />
                 )}
 
-                <div className="mt-8">
+                <div className="mt-8" hidden={isFormOpen}>
                     <div className="mb-3 flex items-baseline justify-between">
                         <h2 className="text-base font-bold text-base-content">Your games</h2>
                         {!isLoading && <span className="text-xs text-base-content/70">{games.length} {games.length === 1 ? 'game' : 'games'}</span>}
