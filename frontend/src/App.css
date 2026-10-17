@@ -268,8 +268,13 @@ a:focus-visible {
 
 @media (max-width: 720px) {
   .auth-layout {
-    grid-template-columns: 1fr;
+    /* The stacked mobile panels do not need a clipped grid or a card shadow. */
+    display: block;
     min-height: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .welcome-panel {
