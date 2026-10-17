@@ -55,7 +55,7 @@ function PlayForm({ initialPlay, isSaving, onCancel, onSubmit }: PlayFormProps)
                         value={values.playedOn}
                         onChange={event => setValues({ ...values, playedOn: event.target.value })}
                         required
-                        autoFocus
+                        autoFocus={window.matchMedia('(hover: hover) and (pointer: fine)').matches}
                     />
                 </label>
                 <label className="grid gap-1.5 text-sm font-semibold">
