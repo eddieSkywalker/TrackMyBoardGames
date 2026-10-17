@@ -146,7 +146,7 @@ function AppLayout({ children }: { children: ReactNode })
             </header>
             {children}
             {/* DaisyUI includes the phone's bottom safe area in the dock height. The main padding leaves room for it. */}
-            <nav className="dock dock-md z-20 border-base-300 bg-base-100 text-base-content sm:hidden print:hidden" aria-label="Mobile navigation">
+            <nav className="mobile-navigation dock dock-md z-20 border-base-300 bg-base-100 text-base-content sm:hidden print:hidden" aria-label="Mobile navigation">
                 <NavLink to="/collection" end>
                     <svg className="size-6 fill-none stroke-current" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-7h6v7" />

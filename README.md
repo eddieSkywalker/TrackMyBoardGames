@@ -93,6 +93,10 @@ npm run dev
 
 Open `http://localhost:5173`. Keep the terminal running while using the app. The current routes are `/login`, `/register`, and `/collection`. From the collection page, you can add a game and see your saved games.
 
+## Mobile forms
+
+Game and play forms automatically focus their first field only for fine-pointer, hover-capable devices. Touch users tap a field to begin editing instead of opening the keyboard as soon as a form appears. While a field is focused on a narrow touch screen, the dock uses a top-based small-viewport anchor so the keyboard can cover it rather than lifting it above the keyboard. Native keyboard/browser behavior must be checked on real iPhones.
+
 ## Deletion confirmation
 
 Deleting a game or a play opens an in-app confirmation dialog. Type the exact game name or played-on date (`YYYY-MM-DD`) shown in bold to enable Delete. Game deletion also removes its associated play history and QR label.

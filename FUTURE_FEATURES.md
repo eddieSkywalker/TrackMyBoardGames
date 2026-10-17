@@ -2,56 +2,54 @@
 
 Ideas and deferred features to revisit. These are not commitments for the current milestone.
 
-## Linked sign-in methods
+## Authentication status
 
-**Status:** Deferred. Revisit when ready to add user-initiated account linking.
+Duplicate-email registration/login restrictions are implemented, and authentication tests were reported successful. This is not account linking: users must use their original sign-in method. User-initiated linking remains deferred; it was not completed by the duplicate-email policy.
 
-### Important distinction: Google login doesn't create an app password
+## Event-driven architecture learning path
 
-If someone initially registers through Google:
+**Status:** Candidate for discussion, not approved implementation.
 
-- Google authenticates them; the app never receives their Google password.
-- They cannot immediately use that password in the app's email/password login.
-- To use both methods, they need to create a separate email/password credential and securely link the two identities.
-- Those passwords do not need to match, and users should not reuse their Google password.
+### Goal and first use case
 
-Once linked, either method can access the same app account.
+Keep REST for user-facing commands and queries; use events for work that should happen reliably after a change. EDA complements REST rather than replacing every endpoint or requiring microservices.
 
-### My recommendation: explicit account linking
+Recommended learning slice: record a play through REST, then publish `PlayRecorded` and update a reporting projection asynchronously. This connects directly to planned charts without putting payments or access decisions at risk during the learning phase.
 
-Start with a **Linked sign-in methods** section in Profile:
+Other candidates: `GameAdded` for background enrichment, `GameDeleted`/`PlayUpdated`/`PlayDeleted` to keep reports accurate, and verified billing events for plan changes later. Do not automatically add games based on uncertain recognition or grant paid access from unverified events.
 
-1. A user signs into their existing account.
-2. They choose **Link Google** or **Link email/password**.
-3. They authenticate again to prove control of the current account and authenticate the additional identity.
-4. Auth0 links them, keeping the original account as the primary identity.
-5. Future logins through either method lead to the same collection.
+### Incremental implementation
 
-Auth0 recommends authenticating both accounts before linking. A matching, even verified, email should not be the sole proof of ownership. See [Auth0 account linking](https://auth0.com/docs/manage-users/user-accounts/user-account-linking).
+1. Define event contracts: event ID, type/version, occurrence time, owner ID, aggregate ID/version, and the minimal payload needed. Never include access tokens or unnecessary personal data.
+2. Learn Spring in-process application events and after-commit handling for a disposable projection. These alone are not durable delivery: a process failure can lose work.
+3. Add a PostgreSQL transactional outbox: save the play and its event in the same database transaction. Rollback must remove both.
+4. Add a publisher worker that claims pending outbox rows, sends persistent messages to a durable RabbitMQ queue, waits for publisher confirmation, and marks successful publication. An unavailable broker must not lose a committed event.
+5. Add a consumer with manual acknowledgment after its database work commits. Deduplicate by event ID in the same transaction as the projection update. Delivery is at least once, not exactly once.
+6. Add bounded retries, dead-letter handling, alerting, and a documented replay/rebuild workflow. Handle publisher crashes after send but before marking the outbox row.
+7. Extend events to edits/deletes; protect against duplicate and out-of-order delivery using aggregate versions or recomputation from authoritative data.
+8. Prove owner isolation and eventual consistency in the UI. Keep original play records authoritative; projection lag must not change quota/billing authorization.
 
-### How much work is involved?
+### Verification and operational cost
 
-This is a moderate feature, not just an Auth0 checkbox, but it does not require replacing the authentication system.
+- Tests: transaction rollback, broker downtime/recovery, duplicate delivery, stale/out-of-order events, consumer failure before acknowledgment, replay, and cross-user isolation.
+- Metrics: outbox backlog/age, retry count, dead-letter count, consumer lag, and projection freshness.
+- Start with local RabbitMQ and the existing Spring app; a separate service is optional. Account for broker hosting, durable storage, credentials/TLS, patching, and monitoring before production.
+- A single RabbitMQ node is a failure point. Durable queues/persistent messages are not equivalent to a replicated broker or an independent database backup.
+- Relative effort: small in-process demonstration, medium-to-large reliable outbox/RabbitMQ slice. Do not add production infrastructure until the value and operating budget are clear.
 
-| Area | Work needed |
-| --- | --- |
-| Profile UI | Show linked methods and offer a linking action. |
-| Auth0 | Secure linking flow and appropriate Management API access. |
-| Backend | Validate linking requests and keep privileged credentials server-side. |
-| App data | Preserve the existing app-user identity and collection ownership. |
-| Sessions | Refresh authentication after linking and account for previously issued tokens. |
+## Paid tiers and catalog-assisted entry
 
-The backend identifies users by Auth0 issuer and subject, not email, in [UserProfileService.java](backend/src/main/java/com/SwampDragonInn/trackmyboardgames/service/UserProfileService.java). Keeping the existing collection owner as the primary Auth0 identity is therefore important.
+See [Paid-Tier Business Model](PAID-TIER-BUSINESS-MODEL.md) for proposed collection quotas, purchases, charts, and BGG/camera research.
 
-Linking Auth0 identities does not automatically merge two existing Neon users' collections. For the first version, do not merge separate collections automatically; that needs its own deliberate rules.
+## Independent database backups
 
-### Compared with rejecting duplicate emails
+**Status:** Recommended follow-up; not configured by this document.
 
-Rejecting a second sign-in method is also a valid product choice, but it has drawbacks:
-
-- Users must remember their original method.
-- Enforcing this across Google and email/password still requires Auth0 customization.
-- Explicit "this email already exists" messages can disclose whether someone has an account.
-- It prevents users from accessing one collection through multiple sign-in methods.
-
-Before implementing linking, verify that the Auth0 plan supports the intended flow. Availability depends on the plan and implementation.
+- Distinguish availability/replication from backup recovery. A replica mirrors accidental deletes; a same-project branch is not independent protection against project/account deletion.
+- Enable/verify the available Neon recovery history in the console. Published Free pricing checked October 17, 2026 lists a 6-hour history window with a 1 GB limit and one manual snapshot; verify actual account entitlements. The general backup overview describes different minimum history, so the console and current plan terms need confirmation.
+- Export scheduled full custom-format `pg_dump` backups using a direct connection, encrypted storage outside the Neon project, restricted access, retention, and failure alerts. Use a compatible PostgreSQL tool version; the current database is PostgreSQL 18.
+- Initial recovery targets to discuss: at most 24 hours of lost data (daily backups) and recovery within a few hours. These are proposals, not service guarantees.
+- Keep multiple dated backups and a separate/offline or independently protected copy; sync alone can propagate deletion. Existing hardware may make a local backup no-additional-cost, but cloud storage/automation is not guaranteed free.
+- Perform an actual restore drill into an isolated database, verifying schema, counts, game images, plays, and ownership. Never test by overwriting production.
+- Database dumps do not back up Auth0 credentials, Action secrets, AWS configuration, or future external image storage. Document their separate recovery procedures.
+- References: [Neon pricing](https://neon.com/pricing), [backup strategies](https://neon.com/docs/manage/backups).

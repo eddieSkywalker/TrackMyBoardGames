@@ -121,6 +121,14 @@ summary,
   display: none;
 }
 
+@media (max-width: 639px) and (pointer: coarse) {
+  /* Viewport units exclude the keyboard; anchor from the top instead of lifting above it. */
+  main:has(:is(input:not([type='checkbox']):not([type='radio']):not([type='file']), textarea, select):focus) .mobile-navigation {
+    top: calc(100svh - 4rem - env(safe-area-inset-bottom));
+    bottom: auto;
+  }
+}
+
 @media print {
   @page {
     margin: 10mm;
