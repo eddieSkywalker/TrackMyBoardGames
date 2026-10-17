@@ -18,6 +18,7 @@ See [BUILD_PLAN.md](BUILD_PLAN.md) for planned milestones and release goals.
 ```text
 backend/       Spring Boot API and Flyway migrations
 frontend/      React single-page application
+auth0/         Auth0 Actions, account-policy tests, and deployment instructions
 BUILD_PLAN.md  Milestones, build plan, and roadmap
 ```
 
@@ -68,6 +69,8 @@ The React app requests API tokens after sign-in. In the Auth0 API's **Permission
 Spring exposes public `GET /api/health`, protected `GET /api/me`, and owner-scoped game routes: `GET /api/games`, `GET /api/games/{id}`, `POST /api/games`, `PUT /api/games/{id}`, and `DELETE /api/games/{id}`. The local profile stores the Auth0 issuer and subject; it does not store passwords.
 
 ## Run Locally
+
+For the optional original-sign-in-method policy and its required Auth0 Dashboard setup, see [auth0/README.md](auth0/README.md). Saving the Action scripts locally does not enable the policy.
 
 Run the backend and frontend in separate terminals from the repository root.
 
