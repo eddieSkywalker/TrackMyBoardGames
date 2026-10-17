@@ -18,6 +18,7 @@ See [BUILD_PLAN.md](BUILD_PLAN.md) for planned milestones and release goals.
 ```text
 backend/       Spring Boot API and Flyway migrations
 frontend/      React single-page application
+auth0/         Auth0 Actions, account-policy tests, and deployment instructions
 BUILD_PLAN.md  Milestones, build plan, and roadmap
 ```
 
@@ -69,6 +70,8 @@ Spring exposes public `GET /api/health`, protected `GET /api/me`, and owner-scop
 
 ## Run Locally
 
+For the optional original-sign-in-method policy and its required Auth0 Dashboard setup, see [auth0/README.md](auth0/README.md). Saving the Action scripts locally does not enable the policy.
+
 Run the backend and frontend in separate terminals from the repository root.
 
 Backend:
@@ -89,6 +92,12 @@ npm run dev
 ```
 
 Open `http://localhost:5173`. Keep the terminal running while using the app. The current routes are `/login`, `/register`, and `/collection`. From the collection page, you can add a game and see your saved games.
+
+## Deletion confirmation
+
+Deleting a game or a play opens an in-app confirmation dialog. Type the exact game name or played-on date (`YYYY-MM-DD`) shown in bold to enable Delete. Game deletion also removes its associated play history and QR label.
+
+Cancel is focused initially; Escape cancels, and Enter in the confirmation field does not delete. During a delete request, dismissal and duplicate submissions are disabled. A failed request leaves the dialog open with an error so you can retry or cancel.
 
 ## Checks
 

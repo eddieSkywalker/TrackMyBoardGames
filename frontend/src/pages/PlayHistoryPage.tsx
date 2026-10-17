@@ -3,6 +3,7 @@ import { useAuth0 } from '@auth0/auth0-react'
 import { useParams } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import PlayForm from '../components/PlayForm'
+import DeleteConfirmationDialog from '../components/DeleteConfirmationDialog'
 import { apiAudience, apiBaseUrl, requireToken, responseError } from '../api/apiHelpers'
 import type { BoardGame, GamePlay, PlayFormValues } from '../types/boardGame'
 
@@ -77,6 +78,7 @@ function PlayHistoryPage()
     const [editingPlay, setEditingPlay] = useState<GamePlay | null>(null)
     const [isSaving, setIsSaving] = useState(false)
     const [deletingPlayId, setDeletingPlayId] = useState<string | null>(null)
+    const [playToDelete, setPlayToDelete] = useState<GamePlay | null>(null)
 
     // Runs when the page opens (and again if gameId changes): loads the game and its plays from the backend.
     useEffect(() =>
@@ -203,8 +205,6 @@ function PlayHistoryPage()
     // Delete a play after the user confirms; the backend still checks ownership.
     async function handleDelete(play: GamePlay)
     {
-        if (!window.confirm(`Delete the play from ${play.playedOn}?`)) return
-
         setDeletingPlayId(play.id)
         setErrorMessage(null)
         setSuccessMessage(null)
@@ -220,15 +220,13 @@ function PlayHistoryPage()
             if (editingPlay?.id === play.id) setEditingPlay(null)
             setSuccessMessage('Play was deleted.')
         }
-        catch (error)
-        {
-            setErrorMessage(error instanceof Error ? error.message : 'Could not delete this play.')
-        }
         finally
         {
             setDeletingPlayId(null)
         }
     }
+
+    const isPlayFormOpen = isFormOpen || editingPlay !== null
 
     // What follows is the screen itself. {condition && ...} and {condition ? a : b} choose what to show.
     return (
@@ -248,7 +246,7 @@ function PlayHistoryPage()
                         <p className="mt-3 text-sm text-base-content/70">
                             Record of times this game was brought to the table.
                         </p>
-                        <div className="mt-5 flex items-center gap-3">
+                        <div className="mt-5 flex items-center gap-3" hidden={isPlayFormOpen}>
                             <button className="btn btn-primary btn-sm" type="button" onClick={openAddForm} disabled={isLoading}>
                                 Add play
                             </button>
@@ -257,7 +255,7 @@ function PlayHistoryPage()
                 </div>
 
                 {/* Add/edit form. key makes React start a fresh form when switching between plays. */}
-                {(isFormOpen || editingPlay) && (
+                {isPlayFormOpen && (
                     <PlayForm
                         key={editingPlay?.id ?? 'new'}
                         initialPlay={editingPlay ?? undefined}
@@ -282,6 +280,7 @@ function PlayHistoryPage()
                 )}
 
                 {/* Body: loading message, then the empty state, then the table of plays. */}
+                <div hidden={isPlayFormOpen}>
                 {isLoading ? (
                     <p className="rounded-box border border-base-300 bg-base-100 px-4 py-6 text-sm text-base-content/70" role="status">
                         Loading play history...
@@ -325,7 +324,7 @@ function PlayHistoryPage()
                                                                                     <button
                                                                                         className="btn btn-ghost btn-xs text-error"
                                                                                         type="button"
-                                                                                        onClick={() => void handleDelete(play)}
+                                                                                        onClick={() => setPlayToDelete(play)}
                                                                                         disabled={deletingPlayId === play.id}
                                                                                     >
                                                                                         {deletingPlayId === play.id ? 'Deleting...' : 'Delete'}
@@ -337,7 +336,19 @@ function PlayHistoryPage()
                         </table>
                     </div>
                 )}
+                </div>
             </section>
+            {playToDelete && (
+                <DeleteConfirmationDialog
+                    key={playToDelete.id}
+                    title="Delete play?"
+                    description={`This will permanently delete the play from ${playToDelete.playedOn} for ${game?.name ?? 'this game'}. This cannot be undone.`}
+                    confirmationValue={playToDelete.playedOn}
+                    confirmLabel="Delete play"
+                    onConfirm={() => handleDelete(playToDelete)}
+                    onCancel={() => setPlayToDelete(null)}
+                />
+            )}
         </AppLayout>
     )
 }

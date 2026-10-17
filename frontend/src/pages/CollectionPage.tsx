@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import BoardGameForm from '../components/BoardGameForm'
 import BoardGameCollection from '../components/BoardGameCollection'
+import DeleteConfirmationDialog from '../components/DeleteConfirmationDialog'
 import ShelfBackground from '../components/ShelfBackground'
 import { apiAudience, apiBaseUrl, responseError } from '../api/apiHelpers'
 import type { BoardGame, GameFormValues } from '../types/boardGame'
@@ -18,6 +19,7 @@ function CollectionPage()
     const [isAddFormOpen, setIsAddFormOpen] = useState(false)
     const [editingGame, setEditingGame] = useState<BoardGame | null>(null)
     const [deletingGameId, setDeletingGameId] = useState<string | null>(null)
+    const [gameToDelete, setGameToDelete] = useState<BoardGame | null>(null)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
     const location = useLocation()
@@ -142,8 +144,6 @@ function CollectionPage()
     // Delete only after the user confirms; the backend still enforces collection ownership.
     async function handleDelete(game: BoardGame)
     {
-        if (!window.confirm(`Delete ${game.name} from your collection?`)) return
-
         setDeletingGameId(game.id)
         setErrorMessage(null)
         setSuccessMessage(null)
@@ -166,10 +166,6 @@ function CollectionPage()
             setGames(currentGames => currentGames.filter(existingGame => existingGame.id !== game.id))
             if (editingGame?.id === game.id) setEditingGame(null)
             setSuccessMessage(`${game.name} was deleted from your collection.`)
-        }
-        catch (error)
-        {
-            setErrorMessage(error instanceof Error ? error.message : 'Could not delete this game.')
         }
         finally
         {
@@ -251,7 +247,7 @@ function CollectionPage()
                     />
                 )}
 
-                <div className="mt-8">
+                <div className="mt-8" hidden={isFormOpen}>
                     <div className="mb-3 flex items-baseline justify-between">
                         <h2 className="text-base font-bold text-base-content">Your games</h2>
                         {!isLoading && <span className="text-xs text-base-content/70">{games.length} {games.length === 1 ? 'game' : 'games'}</span>}
@@ -279,12 +275,23 @@ function CollectionPage()
                         <BoardGameCollection
                             games={games}
                             onEdit={openEditForm}
-                            onDelete={handleDelete}
+                            onDelete={setGameToDelete}
                             deletingGameId={deletingGameId}
                         />
                     )}
                 </div>
             </section>
+            {gameToDelete && (
+                <DeleteConfirmationDialog
+                    key={gameToDelete.id}
+                    title="Delete game?"
+                    description={`This will permanently delete ${gameToDelete.name} and its associated play history and QR label. This cannot be undone.`}
+                    confirmationValue={gameToDelete.name}
+                    confirmLabel="Delete game"
+                    onConfirm={() => handleDelete(gameToDelete)}
+                    onCancel={() => setGameToDelete(null)}
+                />
+            )}
         </AppLayout>
     )
 }
