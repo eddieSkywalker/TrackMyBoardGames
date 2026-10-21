@@ -15,8 +15,13 @@ import com.SwampDragonInn.trackmyboardgames.api.GamePlayResponse;
 import com.SwampDragonInn.trackmyboardgames.domain.AppUser;
 import com.SwampDragonInn.trackmyboardgames.domain.BoardGame;
 import com.SwampDragonInn.trackmyboardgames.domain.GamePlay;
+import com.SwampDragonInn.trackmyboardgames.domain.OutboxEvent;
+import com.SwampDragonInn.trackmyboardgames.event.PlayRecorded;
 import com.SwampDragonInn.trackmyboardgames.repository.BoardGameRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.GamePlayRepository;
+import com.SwampDragonInn.trackmyboardgames.repository.OutboxEventRepository;
+
+import tools.jackson.databind.json.JsonMapper;
 
 // Applies play rules and ensures every operation is limited to games owned by the signed-in user.
 @Service
@@ -26,13 +31,18 @@ public class GamePlayService
 	private final GamePlayRepository gamePlayRepository;
 	private final BoardGameRepository boardGameRepository;
 	private final UserProfileService userProfileService;
+	private final OutboxEventRepository outboxEventRepository;
+	private final JsonMapper jsonMapper;
 
 	public GamePlayService(GamePlayRepository gamePlayRepository, BoardGameRepository boardGameRepository,
-			UserProfileService userProfileService)
+			UserProfileService userProfileService, OutboxEventRepository outboxEventRepository,
+			JsonMapper jsonMapper)
 	{
 		this.gamePlayRepository = gamePlayRepository;
 		this.boardGameRepository = boardGameRepository;
 		this.userProfileService = userProfileService;
+		this.outboxEventRepository = outboxEventRepository;
+		this.jsonMapper = jsonMapper;
 	}
 
 	// List a game's plays, newest first.
@@ -68,7 +78,27 @@ public class GamePlayService
 		GamePlay play = new GamePlay(game, request.playedOn(), request.durationMinutes(),
 				request.playerCount(), request.notes());
 
-		return GamePlayResponse.from(this.gamePlayRepository.save(play));
+		GamePlay savedPlay = this.gamePlayRepository.save(play);
+
+		// Saving assigns the play ID before we build its event snapshot.
+		PlayRecorded payload = new PlayRecorded(
+            savedPlay.getId(), game.getId(),
+            savedPlay.getPlayedOn(), 
+            savedPlay.getDurationMinutes(), 
+            savedPlay.getPlayerCount());
+            
+		OutboxEvent event = new OutboxEvent(
+            "PlayRecorded", 
+            1, 
+            owner.getId(),  
+            savedPlay.getId(),
+            this.jsonMapper.writeValueAsString(payload), 
+            savedPlay.getCreatedAt());
+
+		// The existing transaction commits both rows together. Let any failure roll back both.
+		this.outboxEventRepository.save(event);
+
+		return GamePlayResponse.from(savedPlay);
 	}
 
 	// Validate and replace the details of an existing play.

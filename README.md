@@ -128,16 +128,24 @@ Flyway runs migrations from `backend/src/main/resources/db/migration` at backend
 
 Migration V9 adds `outbox_events`, a shared holding table for multiple event types. Each row records an event's type/version, owner and source identifiers, JSON object payload, occurrence time, and publication/retry/claim metadata. Source identifiers are intentionally not cascading foreign keys so deletion events can outlive deleted records.
 
-An empty `published_at` means not yet confirmed published to the message service; it does not mean "not processed by the receiver." Receiver deduplication will use a separate table in a later slice. Game/play operations do not create events yet, and no AWS SDK, SQS queue, publisher, consumer, or Stat panel is enabled by this first slice.
+An empty `published_at` means not yet confirmed published to the message service; it does not mean "not processed by the receiver." Receiver deduplication will use a separate table in a later slice.
+
+### Recording a play - second slice
+
+Creating a play now saves one version-1 `PlayRecorded` event in the same database transaction. Either both records commit or neither does, including when JSON serialization or database persistence fails. The existing API response is unchanged.
+
+The event's `owner_id` is the local user UUID, and `aggregate_id` is the play UUID. Its JSON payload contains `playId`, `gameId`, `playedOn`, `durationMinutes`, and `playerCount`; optional values remain null. Private notes and Auth0 tokens are not included. `occurred_at` is the play's creation time, not its played-on date.
+
+Only new-play creation produces events in this slice. Game changes, play edits/deletes, existing-data backfill, and game-deletion cascades are not wired yet. There is still no AWS SDK, publisher, consumer, or Stat panel; pending events will accumulate until publishing is implemented.
 
 Run the focused persistence tests against a disposable PostgreSQL database/schema with the usual database environment settings:
 
 ```powershell
 cd backend
-.\mvnw.cmd '-Dtest=OutboxEventPersistenceTests' test
+.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,GamePlayApiTests'
 ```
 
-Flyway applies migrations before the tests and JPA validates the schema. Test rows roll back, but migrations remain; do not point this command at production.
+Flyway applies migrations before the tests and JPA validates the schema. Persistence/API test rows roll back; the outbox service tests exercise actual commits and clean up their own records. Migrations remain; do not point this command at production.
 
 ## Releases
 
