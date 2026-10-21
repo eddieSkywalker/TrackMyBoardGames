@@ -122,7 +122,22 @@ npm run build
 
 ## Database Migrations
 
-Flyway runs migrations from `backend/src/main/resources/db/migration` at backend startup. Add schema changes as new versioned SQL files, for example `V1__create_users.sql`; do not edit migrations after they have been applied. Hibernate is configured to validate mappings, not to create or update the schema. The database currently has Flyway's schema-history table, but no application tables.
+Flyway runs migrations from `backend/src/main/resources/db/migration` at backend startup. Add schema changes as new versioned SQL files, for example `V9__create_outbox_events.sql`; do not edit migrations after they have been applied. Hibernate is configured to validate mappings, not to create or update the schema.
+
+### EDA foundation - first slice
+
+Migration V9 adds `outbox_events`, a shared holding table for multiple event types. Each row records an event's type/version, owner and source identifiers, JSON object payload, occurrence time, and publication/retry/claim metadata. Source identifiers are intentionally not cascading foreign keys so deletion events can outlive deleted records.
+
+An empty `published_at` means not yet confirmed published to the message service; it does not mean "not processed by the receiver." Receiver deduplication will use a separate table in a later slice. Game/play operations do not create events yet, and no AWS SDK, SQS queue, publisher, consumer, or Stat panel is enabled by this first slice.
+
+Run the focused persistence tests against a disposable PostgreSQL database/schema with the usual database environment settings:
+
+```powershell
+cd backend
+.\mvnw.cmd '-Dtest=OutboxEventPersistenceTests' test
+```
+
+Flyway applies migrations before the tests and JPA validates the schema. Test rows roll back, but migrations remain; do not point this command at production.
 
 ## Releases
 
