@@ -1,5 +1,6 @@
 package com.SwampDragonInn.trackmyboardgames.service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -16,9 +17,14 @@ import com.SwampDragonInn.trackmyboardgames.api.BoardGameRequest;
 import com.SwampDragonInn.trackmyboardgames.api.BoardGameResponse;
 import com.SwampDragonInn.trackmyboardgames.domain.AppUser;
 import com.SwampDragonInn.trackmyboardgames.domain.BoardGame;
+import com.SwampDragonInn.trackmyboardgames.domain.OutboxEvent;
+import com.SwampDragonInn.trackmyboardgames.event.GameSnapshot;
 import com.SwampDragonInn.trackmyboardgames.repository.BoardGameRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.GamePlayRepository;
+import com.SwampDragonInn.trackmyboardgames.repository.OutboxEventRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.GamePlayRepository.PlayStats;
+
+import tools.jackson.databind.json.JsonMapper;
 
 // Applies game rules and ensures every database operation is limited to the signed-in user's profile.
 @Service
@@ -29,14 +35,19 @@ public class BoardGameService
 	private final GamePlayRepository gamePlayRepository;
 	private final UserProfileService userProfileService;
 	private final ImageUploadChecker imageUploadChecker;
+	private final OutboxEventRepository outboxEventRepository;
+	private final JsonMapper jsonMapper;
 
 	public BoardGameService(BoardGameRepository boardGameRepository, GamePlayRepository gamePlayRepository,
-			UserProfileService userProfileService, ImageUploadChecker imageUploadChecker)
+			UserProfileService userProfileService, ImageUploadChecker imageUploadChecker,
+			OutboxEventRepository outboxEventRepository, JsonMapper jsonMapper)
 	{
 		this.imageUploadChecker = imageUploadChecker;
 		this.boardGameRepository = boardGameRepository;
 		this.gamePlayRepository = gamePlayRepository;
 		this.userProfileService = userProfileService;
+		this.outboxEventRepository = outboxEventRepository;
+		this.jsonMapper = jsonMapper;
 	}
 
 	// List the owner's games alphabetically, optionally filtering by name, each with its play totals.
@@ -84,8 +95,10 @@ public class BoardGameService
 				request.maxPlayers(), request.bestPlayers(), request.playTimeMinutes(), request.notes());
 
 		applyCover(game, request.coverImage());
+		BoardGame savedGame = saveGame(game);
+		saveGameEvent("GameAdded", owner.getId(), savedGame, savedGame.getCreatedAt());
 
-		return toResponse(saveGame(game), null);
+		return toResponse(savedGame, null);
 	}
 
 	// Validate and replace the details of an existing game owned by this user.
@@ -104,8 +117,10 @@ public class BoardGameService
 		game.updateDetails(name, edition, request.minPlayers(), request.maxPlayers(),
 				request.bestPlayers(), request.playTimeMinutes(), request.notes());
 		applyCover(game, request.coverImage());
+		BoardGame savedGame = saveGame(game);
+		saveGameEvent("GameUpdated", owner.getId(), savedGame, Instant.now());
 
-		return toResponse(saveGame(game), loadStats(gameId, owner.getId()));
+		return toResponse(savedGame, loadStats(gameId, owner.getId()));
 	}
 
 	// Delete the requested game only if it belongs to the authenticated user.
@@ -113,7 +128,26 @@ public class BoardGameService
 	public void delete(String subjectIssuer, String subject, UUID gameId)
 	{
 		AppUser owner = this.userProfileService.findOrCreate(subjectIssuer, subject);
-		this.boardGameRepository.delete(findOwnedGame(owner.getId(), gameId));
+		BoardGame game = findOwnedGame(owner.getId(), gameId);
+		Instant deletedAt = Instant.now();
+		this.boardGameRepository.delete(game);
+		saveGameEvent("GameDeleted", owner.getId(), game, deletedAt);
+	}
+
+	// Keep the game snapshot even for deletion, after the source row has been removed.
+	private void saveGameEvent(String eventType, UUID ownerId, BoardGame game, Instant occurredAt)
+	{
+		GameSnapshot payload = new GameSnapshot(game.getId(), game.getName(), game.getEdition());
+		OutboxEvent event = new OutboxEvent(
+				eventType,
+				1,
+				ownerId,
+				game.getId(),
+				this.jsonMapper.writeValueAsString(payload),
+				occurredAt);
+
+		// The event and game change commit or roll back together.
+		this.outboxEventRepository.save(event);
 	}
 
 	// Get the owner's games in name order ; a blank search means no filtering.

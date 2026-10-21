@@ -1,5 +1,6 @@
 package com.SwampDragonInn.trackmyboardgames.service;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -16,7 +17,7 @@ import com.SwampDragonInn.trackmyboardgames.domain.AppUser;
 import com.SwampDragonInn.trackmyboardgames.domain.BoardGame;
 import com.SwampDragonInn.trackmyboardgames.domain.GamePlay;
 import com.SwampDragonInn.trackmyboardgames.domain.OutboxEvent;
-import com.SwampDragonInn.trackmyboardgames.event.PlayRecorded;
+import com.SwampDragonInn.trackmyboardgames.event.PlaySnapshot;
 import com.SwampDragonInn.trackmyboardgames.repository.BoardGameRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.GamePlayRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.OutboxEventRepository;
@@ -81,22 +82,7 @@ public class GamePlayService
 		GamePlay savedPlay = this.gamePlayRepository.save(play);
 
 		// Saving assigns the play ID before we build its event snapshot.
-		PlayRecorded payload = new PlayRecorded(
-            savedPlay.getId(), game.getId(),
-            savedPlay.getPlayedOn(), 
-            savedPlay.getDurationMinutes(), 
-            savedPlay.getPlayerCount());
-            
-		OutboxEvent event = new OutboxEvent(
-            "PlayRecorded", 
-            1, 
-            owner.getId(),  
-            savedPlay.getId(),
-            this.jsonMapper.writeValueAsString(payload), 
-            savedPlay.getCreatedAt());
-
-		// The existing transaction commits both rows together. Let any failure roll back both.
-		this.outboxEventRepository.save(event);
+		savePlayEvent("PlayRecorded", owner.getId(), savedPlay, savedPlay.getCreatedAt());
 
 		return GamePlayResponse.from(savedPlay);
 	}
@@ -110,8 +96,10 @@ public class GamePlayService
 		AppUser owner = this.userProfileService.findOrCreate(subjectIssuer, subject);
 		GamePlay play = findOwnedPlay(owner.getId(), gameId, playId);
 		play.updateDetails(request.playedOn(), request.durationMinutes(), request.playerCount(), request.notes());
+		GamePlay savedPlay = this.gamePlayRepository.save(play);
+		savePlayEvent("PlayUpdated", owner.getId(), savedPlay, Instant.now());
 
-		return GamePlayResponse.from(this.gamePlayRepository.save(play));
+		return GamePlayResponse.from(savedPlay);
 	}
 
 	// Delete a play only when its game belongs to the authenticated user.
@@ -119,7 +107,31 @@ public class GamePlayService
 	public void delete(String subjectIssuer, String subject, UUID gameId, UUID playId)
 	{
 		AppUser owner = this.userProfileService.findOrCreate(subjectIssuer, subject);
-		this.gamePlayRepository.delete(findOwnedPlay(owner.getId(), gameId, playId));
+		GamePlay play = findOwnedPlay(owner.getId(), gameId, playId);
+		Instant deletedAt = Instant.now();
+		this.gamePlayRepository.delete(play);
+		savePlayEvent("PlayDeleted", owner.getId(), play, deletedAt);
+	}
+
+	// Store a snapshot so later edits or deletion cannot change this event's payload.
+	private void savePlayEvent(String eventType, UUID ownerId, GamePlay play, Instant occurredAt)
+	{
+		PlaySnapshot payload = new PlaySnapshot(
+				play.getId(),
+				play.getBoardGame().getId(),
+				play.getPlayedOn(),
+				play.getDurationMinutes(),
+				play.getPlayerCount());
+		OutboxEvent event = new OutboxEvent(
+				eventType,
+				1,
+				ownerId,
+				play.getId(),
+				this.jsonMapper.writeValueAsString(payload),
+				occurredAt);
+
+        // This saves the play event to the outbox for later processing by the event handler, 
+		this.outboxEventRepository.save(event);
 	}
 
 	// Treat another user's game the same as a missing game so its existence is not exposed.

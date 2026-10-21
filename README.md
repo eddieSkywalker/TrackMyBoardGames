@@ -130,19 +130,23 @@ Migration V9 adds `outbox_events`, a shared holding table for multiple event typ
 
 An empty `published_at` means not yet confirmed published to the message service; it does not mean "not processed by the receiver." Receiver deduplication will use a separate table in a later slice.
 
-### Recording a play - second slice
+### Play history events - third slice
 
-Creating a play now saves one version-1 `PlayRecorded` event in the same database transaction. Either both records commit or neither does, including when JSON serialization or database persistence fails. The existing API response is unchanged.
+Creating, editing, and deleting a play now save a corresponding version-1 outbox event (`PlayRecorded`, `PlayUpdated`, or `PlayDeleted`) in the same database transaction as the source change. Either both records commit or neither does, including when outbox persistence fails. The existing API responses are unchanged.
 
-The event's `owner_id` is the local user UUID, and `aggregate_id` is the play UUID. Its JSON payload contains `playId`, `gameId`, `playedOn`, `durationMinutes`, and `playerCount`; optional values remain null. Private notes and Auth0 tokens are not included. `occurred_at` is the play's creation time, not its played-on date.
+Each event's `owner_id` is the local user UUID, and `aggregate_id` is the play UUID. The shared `PlaySnapshot` JSON payload contains `playId`, `gameId`, `playedOn`, `durationMinutes`, and `playerCount`; optional values remain null. Update and delete events snapshot the play's values at the time of that operation. Private notes and Auth0 tokens are not included. For `PlayRecorded`, `occurred_at` is the play's creation time, not its played-on date.
 
-Only new-play creation produces events in this slice. Game changes, play edits/deletes, existing-data backfill, and game-deletion cascades are not wired yet. There is still no AWS SDK, publisher, consumer, or Stat panel; pending events will accumulate until publishing is implemented.
+Existing-data backfill and game add/edit/delete events (including game-deletion cascades) are not wired yet. ### Collection events - fourth slice
+
+Adding, editing, or deleting a game now saves a corresponding version-1 outbox event (`GameAdded`, `GameUpdated`, or `GameDeleted`) in the same transaction as the game change. The payload snapshots the game's ID, name, and edition, which lets a future statistics consumer respond to collection changes and game renames. Deleting a game still cascades to its play history, while its outbox event remains independent of the deleted row.
+
+We are proceeding with hosted RabbitMQ (CloudAMQP) rather than SQS. This choice does not change the outbox or the event creation in these slices. A RabbitMQ publisher and consumer have not been added yet; pending events remain in PostgreSQL.
 
 Run the focused persistence tests against a disposable PostgreSQL database/schema with the usual database environment settings:
 
 ```powershell
 cd backend
-.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,GamePlayApiTests'
+.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,BoardGameOutboxTests,GamePlayApiTests,BoardGameEditionTests'
 ```
 
 Flyway applies migrations before the tests and JPA validates the schema. Persistence/API test rows roll back; the outbox service tests exercise actual commits and clean up their own records. Migrations remain; do not point this command at production.

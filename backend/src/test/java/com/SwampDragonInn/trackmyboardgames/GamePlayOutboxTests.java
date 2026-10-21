@@ -129,15 +129,67 @@ class GamePlayOutboxTests
 	}
 
 	@Test
+	void updateAndDeleteEachSaveAnEventWithTheAffectedPlaySnapshot()
+	{
+		GamePlayResponse created = this.service.create(ISSUER, this.subject, this.gameId, request(45, 3));
+		GamePlayResponse updated = this.service.update(ISSUER, this.subject, this.gameId, created.id(),
+				new GamePlayRequest(LocalDate.of(2026, 1, 11), 60, 4, "Updated private notes"));
+
+		assertThat(playCount()).isEqualTo(1);
+		assertThat(eventsForOwner()).hasSize(2);
+		JsonNode updatedPayload = payloadForEvent("PlayUpdated");
+		assertThat(updatedPayload.get("playId").asText()).isEqualTo(created.id().toString());
+		assertThat(updatedPayload.get("gameId").asText()).isEqualTo(this.gameId.toString());
+		assertThat(updatedPayload.get("playedOn").asText()).isEqualTo("2026-01-11");
+		assertThat(updatedPayload.get("durationMinutes").asInt()).isEqualTo(60);
+		assertThat(updatedPayload.get("playerCount").asInt()).isEqualTo(4);
+		assertThat(updatedPayload.has("notes")).isFalse();
+
+		this.service.delete(ISSUER, this.subject, this.gameId, updated.id());
+
+		assertThat(playCount()).isZero();
+		assertThat(eventsForOwner()).hasSize(3);
+		JsonNode deletedPayload = payloadForEvent("PlayDeleted");
+		assertThat(deletedPayload.get("playId").asText()).isEqualTo(created.id().toString());
+		assertThat(deletedPayload.get("playedOn").asText()).isEqualTo("2026-01-11");
+		assertThat(deletedPayload.get("playerCount").asInt()).isEqualTo(4);
+	}
+
+	@Test
+	void failedUpdateEventRollsBackThePlayChange()
+	{
+		GamePlayResponse created = this.service.create(ISSUER, this.subject, this.gameId, request(45, 3));
+		failAfterSavingOutboxEvent();
+
+		assertThatThrownBy(() -> this.service.update(ISSUER, this.subject, this.gameId, created.id(),
+				new GamePlayRequest(LocalDate.of(2026, 1, 11), 60, 4, null)))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessage("Simulated outbox failure after SQL inserts");
+
+		assertThat(playCount()).isEqualTo(1);
+		assertThat(playDate(created.id())).isEqualTo(LocalDate.of(2026, 1, 10));
+		assertThat(eventsForOwner()).hasSize(1);
+	}
+
+	@Test
+	void failedDeleteEventRollsBackThePlayDeletion()
+	{
+		GamePlayResponse created = this.service.create(ISSUER, this.subject, this.gameId, request(45, 3));
+		failAfterSavingOutboxEvent();
+
+		assertThatThrownBy(() -> this.service.delete(ISSUER, this.subject, this.gameId, created.id()))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessage("Simulated outbox failure after SQL inserts");
+
+		assertThat(playCount()).isEqualTo(1);
+		assertThat(playDate(created.id())).isEqualTo(LocalDate.of(2026, 1, 10));
+		assertThat(eventsForOwner()).hasSize(1);
+	}
+
+	@Test
 	void outboxFailureRollsBackEvenAfterBothInsertsHaveBeenFlushed()
 	{
-		doAnswer(invocation ->
-		{
-			OutboxEvent event = invocation.getArgument(0);
-			this.entityManager.persist(event);
-			this.entityManager.flush();
-			throw new IllegalStateException("Simulated outbox failure after SQL inserts");
-		}).when(this.outboxRepository).save(any(OutboxEvent.class));
+		failAfterSavingOutboxEvent();
 
 		assertThatThrownBy(() -> this.service.create(ISSUER, this.subject, this.gameId, request(45, 4)))
 				.isInstanceOf(IllegalStateException.class)
@@ -189,6 +241,33 @@ class GamePlayOutboxTests
 		return new TransactionTemplate(this.transactionManager).execute(status ->
 				this.entityManager.createQuery("select e from OutboxEvent e where e.ownerId = :ownerId",
 						OutboxEvent.class).setParameter("ownerId", this.ownerId).getResultList());
+	}
+
+	private JsonNode payloadForEvent(String eventType)
+	{
+		OutboxEvent event = eventsForOwner().stream()
+				.filter(candidate -> candidate.getEventType().equals(eventType))
+				.findFirst()
+				.orElseThrow();
+		return this.jsonMapper.readTree(event.getPayload());
+	}
+
+	private LocalDate playDate(UUID playId)
+	{
+		return new TransactionTemplate(this.transactionManager).execute(status ->
+				this.entityManager.createQuery("select p.playedOn from GamePlay p where p.id = :playId",
+						LocalDate.class).setParameter("playId", playId).getSingleResult());
+	}
+
+	private void failAfterSavingOutboxEvent()
+	{
+		doAnswer(invocation ->
+		{
+			OutboxEvent event = invocation.getArgument(0);
+			this.entityManager.persist(event);
+			this.entityManager.flush();
+			throw new IllegalStateException("Simulated outbox failure after SQL inserts");
+		}).when(this.outboxRepository).save(any(OutboxEvent.class));
 	}
 
 	private long playCount()
