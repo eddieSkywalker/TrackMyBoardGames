@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -26,6 +27,7 @@ import com.SwampDragonInn.trackmyboardgames.domain.GamePlay;
 import com.SwampDragonInn.trackmyboardgames.domain.StatisticsSummary;
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsProcessedEventRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSummaryRepository;
+import com.SwampDragonInn.trackmyboardgames.repository.AppUserRepository;
 import com.SwampDragonInn.trackmyboardgames.service.StatisticsRefreshService;
 
 import jakarta.persistence.EntityManager;
@@ -37,6 +39,9 @@ class StatisticsRefreshTests
 
 	@Autowired
 	private StatisticsRefreshService service;
+
+	@Autowired
+	private AppUserRepository users;
 
 	@MockitoSpyBean
 	private StatisticsSummaryRepository summaries;
@@ -221,6 +226,79 @@ class StatisticsRefreshTests
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessage("Statistics event owner does not exist.");
 		assertThat(this.receipts.findById(eventId)).isEmpty();
+	}
+
+	@Test
+	void backfillBuildsExistingDataAndCanBeRepeatedWithoutCreatingEvents()
+	{
+		UUID gameId = game(this.ownerId, "Azul", "");
+		play(gameId, "2026-10-21");
+		long receiptsBefore = receiptCount();
+		assertThat(this.service.backfill(this.ownerId)).isTrue();
+		assertThat(summary().getCollectionSize()).isEqualTo(1);
+		assertThat(summary().getMostPlayed().gameId()).isEqualTo(gameId);
+		assertThat(summary().getMostRecentlyPlayed().gameId()).isEqualTo(gameId);
+		assertThat(summary().getPlaysForMonth(YearMonth.of(2026, 10))).isEqualTo(1);
+
+		game(this.ownerId, "Wingspan", "");
+		assertThat(this.service.backfill(this.ownerId)).isTrue();
+		assertThat(summary().getCollectionSize()).isEqualTo(2);
+		assertThat(summary().getPlaysForMonth(YearMonth.of(2026, 10))).isEqualTo(1);
+		assertThat(receiptCount()).isEqualTo(receiptsBefore);
+	}
+
+	@Test
+	void backfillIncludesEmptyCollectionsAndSkipsDeletedAccounts()
+	{
+		assertThat(this.service.backfill(this.ownerId)).isTrue();
+		assertThat(summary().getCollectionSize()).isZero();
+		assertThat(summary().getMostPlayed()).isNull();
+		assertThat(this.service.backfill(UUID.randomUUID())).isFalse();
+	}
+
+	@Test
+	void failedBackfillPreservesPreviousSummary()
+	{
+		this.service.backfill(this.ownerId);
+		game(this.ownerId, "Azul", "");
+		doAnswer(invocation ->
+		{
+			this.entityManager.merge(invocation.getArgument(0, StatisticsSummary.class));
+			this.entityManager.flush();
+			throw new IllegalStateException("Simulated backfill failure");
+		}).when(this.summaries).saveAndFlush(any(StatisticsSummary.class));
+
+		assertThatThrownBy(() -> this.service.backfill(this.ownerId))
+				.isInstanceOf(IllegalStateException.class).hasMessage("Simulated backfill failure");
+		assertThat(summary().getCollectionSize()).isZero();
+	}
+
+	@Test
+	void backfillIdPagesVisitOwnersOnceWithoutLoadingTheirProfiles()
+	{
+		owner();
+		owner();
+		List<UUID> visited = new ArrayList<>();
+		UUID afterId = null;
+		while (true)
+		{
+			List<UUID> page = this.users.findIdsForStatisticsBackfill(afterId, PageRequest.of(0, 2));
+			if (page.isEmpty())
+			{
+				break;
+			}
+			assertThat(page).hasSizeLessThanOrEqualTo(2);
+			assertThat(visited).doesNotContainAnyElementsOf(page);
+			visited.addAll(page);
+			afterId = page.getLast();
+		}
+		assertThat(visited).containsAll(this.owners);
+	}
+
+	private long receiptCount()
+	{
+		return transaction().execute(status -> this.entityManager
+				.createQuery("select count(e) from StatisticsProcessedEvent e", Long.class).getSingleResult());
 	}
 
 	private UUID owner()

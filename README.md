@@ -136,7 +136,7 @@ Creating, editing, and deleting a play now save a corresponding version-1 outbox
 
 Each event's `owner_id` is the local user UUID, and `aggregate_id` is the play UUID. The shared `PlaySnapshot` JSON payload contains `playId`, `gameId`, `playedOn`, `durationMinutes`, and `playerCount`; optional values remain null. Update and delete events snapshot the play's values at the time of that operation. Private notes and Auth0 tokens are not included. For `PlayRecorded`, `occurred_at` is the play's creation time, not its played-on date.
 
-Existing-data backfill is not wired yet.
+Existing-data statistics backfill is available as an opt-in startup job (see below).
 
 ### Collection events - fourth slice
 
@@ -189,13 +189,21 @@ A temporary database failure is requeued immediately on its first delivery. If a
 
 Automatic connection recovery is enabled. A broker-side consumer cancellation is logged as an error and requires checking the queue and restarting the receiver. Lost acknowledgements can cause redelivery, which the committed receipts make safe. Tests cover the RabbitMQ channel boundary with mocks and verify committed receipts/statistics before acknowledgement using real PostgreSQL; a live CloudAMQP end-to-end check is still required.
 
-Remaining work: existing-user backfill; an owner-scoped statistics API; the four UI cards; publisher batching; and live end-to-end verification. No UI statistics endpoint has been added yet.
+### Initial statistics for existing collections
+
+`StatisticsBackfillRunner` can calculate all four statistics from existing users' games and plays, without creating source records, RabbitMQ messages, or fake processed-event receipts. It reads up to 100 user IDs at a time and commits each user's results separately. It shares the live receiver's owner lock and calculation code, so the two cannot overwrite each other's results for the same user.
+
+The job is disabled by default. To run it against a deliberately selected development database, start the backend with `STATISTICS_BACKFILL_ENABLED=true` (or `app.statistics.backfill-enabled=true` in private settings). It runs once during that application startup, logs progress and completion, then the backend continues running. Disable/remove the setting after success; leaving it enabled repeats the job at every restart. It does not require RabbitMQ to be enabled.
+
+Rerunning safely replaces summaries with recalculated values, rather than adding counts again. A failure stops startup with an error; earlier users remain committed, and the failing user's transaction rolls back. Fix the cause and rerun. Accounts deleted before their calculation are logged and skipped. This is not a snapshot of all users at one instant: new accounts created during a run may need a later event or another run. The job does not scan continuously or run on browser refresh.
+
+Remaining work: an owner-scoped statistics API; the four UI cards; publisher batching; and live end-to-end verification. No UI statistics endpoint has been added yet.
 
 Run the focused persistence tests against a disposable PostgreSQL database/schema with the usual database environment settings:
 
 ```powershell
 cd backend
-.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,BoardGameOutboxTests,RabbitMqPublisherTests,OutboxDispatcherTests,StatisticsProcessedEventTests,StatisticsRefreshTests,StatisticsMessageConsumerTests,StatisticsConsumerIntegrationTests,GamePlayApiTests,BoardGameEditionTests'
+.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,BoardGameOutboxTests,RabbitMqPublisherTests,OutboxDispatcherTests,StatisticsProcessedEventTests,StatisticsRefreshTests,StatisticsBackfillRunnerTests,StatisticsMessageConsumerTests,StatisticsConsumerIntegrationTests,GamePlayApiTests,BoardGameEditionTests'
 ```
 
 Flyway applies migrations before the tests and JPA validates the schema. Persistence/API test rows roll back; the outbox service tests exercise actual commits and clean up their own records. Migrations remain; do not point this command at production.

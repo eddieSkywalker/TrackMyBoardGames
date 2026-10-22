@@ -1,9 +1,11 @@
 package com.SwampDragonInn.trackmyboardgames.repository;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -31,4 +33,13 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID>
 	// Optional contains the owner if found, or is empty if the user no longer exists.
 	// The statistics service currently treats an empty result as an error.
 	Optional<AppUser> findForStatisticsRefresh(@Param("ownerId") UUID ownerId);
+
+	// Reads a small page of IDs, not full profiles. The last ID is a bookmark for the next page,
+	// so finishing a user's backfill does not move other users between pages.
+	@Query(value = """
+			select id from app_users
+			where cast(:afterId as uuid) is null or id > cast(:afterId as uuid)
+			order by id
+			""", nativeQuery = true)
+	List<UUID> findIdsForStatisticsBackfill(@Param("afterId") UUID afterId, Pageable pageable);
 }

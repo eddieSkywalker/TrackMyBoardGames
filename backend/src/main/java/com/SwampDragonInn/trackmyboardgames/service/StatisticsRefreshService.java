@@ -9,6 +9,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.SwampDragonInn.trackmyboardgames.domain.StatisticsSummary;
@@ -28,6 +30,7 @@ import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSummaryReposito
 public class StatisticsRefreshService
 {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(StatisticsRefreshService.class);
 	private final AppUserRepository users;
 	private final StatisticsSourceRepository source;
 	private final StatisticsSummaryRepository summaries;
@@ -44,7 +47,7 @@ public class StatisticsRefreshService
 	}
 
 	// Refreshes one owner's cards for a new event. Returns false when the same event was already handled.
-	// Only the validated receiver (or a controlled backfill) should call this; it is not a public API.
+	// Only the validated receiver should call this; it is not a public API.
 	@Transactional
 	public boolean refresh(UUID eventId, UUID ownerId)
 	{
@@ -64,6 +67,30 @@ public class StatisticsRefreshService
 			return false;
 		}
 
+		rebuildSummary(ownerId, now);
+		return true;
+	}
+
+	// Calculates starting statistics without inventing a RabbitMQ event or processed-event receipt.
+	// Uses the same owner lock as live events so a backfill and a receiver cannot save over one another.
+	// The caller processes users separately, so this transaction only covers one user's calculations.
+	@Transactional
+	public boolean backfill(UUID ownerId)
+	{
+		Objects.requireNonNull(ownerId, "Owner ID is required.");
+		if (this.users.findForStatisticsRefresh(ownerId).isEmpty())
+		{
+			// An account may be deleted after the backfill reads its ID but before it reaches this step.
+			LOGGER.warn("Skipping statistics backfill for owner {} because the account no longer exists.", ownerId);
+			return false;
+		}
+		rebuildSummary(ownerId, Instant.now());
+		return true;
+	}
+
+	// Both event processing and backfill use this calculation, keeping the four cards consistent.
+	private void rebuildSummary(UUID ownerId, Instant now)
+	{
 		// Load one set of totals for each game, including games that have never been played.
 		List<GameTotals> games = this.source.findGameTotals(ownerId);
 
@@ -81,7 +108,6 @@ public class StatisticsRefreshService
 		StatisticsSummary summary = new StatisticsSummary(
 				ownerId, games.size(), mostPlayed, mostRecent, months, now);
 		this.summaries.saveAndFlush(summary);
-		return true;
 	}
 
 	// Chooses the game with the highest play count; games with no plays cannot win this card.
