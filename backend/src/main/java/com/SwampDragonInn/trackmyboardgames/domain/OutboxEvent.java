@@ -158,4 +158,46 @@ public class OutboxEvent
 	{
 		return this.lastError;
 	}
+
+	public void claim(UUID claimToken, Instant claimedUntil)
+	{
+		if (this.publishedAt != null)
+		{
+			throw new IllegalStateException("A published event cannot be claimed.");
+		}
+
+		this.claimToken = Objects.requireNonNull(claimToken, "Claim token is required.");
+		this.claimedUntil = Objects.requireNonNull(claimedUntil, "Claim expiry is required.");
+		this.attemptCount++;
+	}
+
+	public void markPublished(UUID claimToken, Instant publishedAt)
+	{
+		requireCurrentClaim(claimToken);
+		this.publishedAt = Objects.requireNonNull(publishedAt, "Publication time is required.");
+		clearClaim();
+		this.lastError = null;
+	}
+
+	public void scheduleRetry(UUID claimToken, Instant nextAttemptAt, String errorType)
+	{
+		requireCurrentClaim(claimToken);
+		this.nextAttemptAt = Objects.requireNonNull(nextAttemptAt, "Next attempt time is required.");
+		this.lastError = Objects.requireNonNull(errorType, "Error type is required.");
+		clearClaim();
+	}
+
+	private void requireCurrentClaim(UUID claimToken)
+	{
+		if (this.claimToken == null || !this.claimToken.equals(claimToken))
+		{
+			throw new IllegalStateException("The outbox event is no longer held by this claim.");
+		}
+	}
+
+	private void clearClaim()
+	{
+		this.claimToken = null;
+		this.claimedUntil = null;
+	}
 }

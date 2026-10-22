@@ -142,7 +142,7 @@ Existing-data backfill is not wired yet.
 
 Adding, editing, or deleting a game now saves a corresponding version-1 outbox event (`GameAdded`, `GameUpdated`, or `GameDeleted`) in the same transaction as the game change. The payload snapshots the game's ID, name, and edition, which lets a future statistics consumer respond to collection changes and game renames. Deleting a game still cascades to its play history, while its outbox event remains independent of the deleted row.
 
-We are proceeding with hosted RabbitMQ (CloudAMQP) rather than SQS. This choice does not change the outbox or the event creation in these slices. The RabbitMQ publisher adapter is separate from the outbox polling worker and consumer; pending events remain in PostgreSQL until that worker is implemented.
+We are proceeding with hosted RabbitMQ (CloudAMQP) rather than SQS. This choice does not change the outbox or event creation. The RabbitMQ publisher adapter and outbox polling worker are implemented; the message consumer is still future work.
 
 ### RabbitMQ connection and routing - fifth slice
 
@@ -150,7 +150,9 @@ The backend now includes the RabbitMQ Java client and, when explicitly enabled, 
 
 When enabled, the application declares a durable topic exchange (`trackmyboardgames.events`), a durable statistics queue bound with `#`, and a durable dead-letter exchange/queue route. The publisher sends persistent JSON messages with the outbox event ID, event type/version, owner ID, aggregate ID, and occurrence time. It waits for a publisher confirmation before returning successfully.
 
-The outbox polling/claim worker and message receiver are not implemented in this slice, so enabling RabbitMQ only creates the connection/topology; it does not yet drain pending outbox events. Consumer acknowledgements, retry behavior, and DLQ inspection/replay will be covered in later slices.
+The outbox polling/claim worker now sends at most one due event every five seconds while RabbitMQ is enabled. It briefly locks and claims a row in PostgreSQL, commits that claim, publishes without holding a database transaction, waits for RabbitMQ's publisher confirmation, and only then marks the row published. If publishing fails, it releases the claim and schedules an exponential retry (starting at five seconds, capped at five minutes). The claim expires after 30 seconds if the process stops unexpectedly.
+
+This is an at-least-once publisher: if RabbitMQ accepts a message but the backend loses the confirmation or cannot mark the database row published, the event can be sent again after its claim expires. The future receiver must deduplicate by the outbox event ID. Consumer acknowledgements, processing retries, and DLQ inspection/replay remain later work.
 
 For local development, `backend/config/application-local.properties` is a Git-ignored profile-specific settings file. Add the AMQP URI from a separate development CloudAMQP instance there, then start the backend with the `local` Spring profile active. Spring loads these settings in addition to `application.properties`; local-profile values override matching base values, while environment variables can override either file.
 
@@ -160,7 +162,7 @@ Run the focused persistence tests against a disposable PostgreSQL database/schem
 
 ```powershell
 cd backend
-.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,BoardGameOutboxTests,RabbitMqPublisherTests,GamePlayApiTests,BoardGameEditionTests'
+.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,BoardGameOutboxTests,RabbitMqPublisherTests,OutboxDispatcherTests,GamePlayApiTests,BoardGameEditionTests'
 ```
 
 Flyway applies migrations before the tests and JPA validates the schema. Persistence/API test rows roll back; the outbox service tests exercise actual commits and clean up their own records. Migrations remain; do not point this command at production.

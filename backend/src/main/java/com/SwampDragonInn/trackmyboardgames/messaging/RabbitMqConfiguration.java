@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -18,6 +19,7 @@ import com.rabbitmq.client.ConnectionFactory;
 @Configuration
 // Keep local runs and tests independent of a hosted broker until RabbitMQ is explicitly enabled.
 @ConditionalOnProperty(prefix = "app.messaging.rabbitmq", name = "enabled", havingValue = "true")
+@EnableScheduling
 public class RabbitMqConfiguration
 {
 
