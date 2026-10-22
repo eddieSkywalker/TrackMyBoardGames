@@ -164,13 +164,28 @@ Migration V10 adds `statistics_processed_events`, a receipt book for events the 
 
 The repository requires an existing transaction when recording a receipt. The future receiver must record the receipt and update statistics together: a new receipt means continue processing; an existing receipt means skip the duplicate. If processing fails, both changes must roll back so a later delivery can try again. RabbitMQ must only be acknowledged after the transaction succeeds.
 
-This slice provides and tests duplicate protection only. It does not start a RabbitMQ consumer, acknowledge queued messages, or calculate statistics yet. The publisher's one-event-per-check behavior is unchanged; batch delivery remains a separate improvement.
+The receipt table provides duplicate protection; the refresh service below uses it when calculating statistics. No RabbitMQ consumer is started yet. The publisher's one-event-per-check behavior is unchanged; batch delivery remains a separate improvement.
+
+### Statistics calculations and saved cards
+
+Migration V11 adds one saved statistics summary per owner for the first four cards:
+
+- Collection size, including games with no recorded plays.
+- Most-played game, based on all recorded plays of games still in the collection.
+- Plays for the current calendar month, based on the played-on date rather than when the record was entered.
+- Most recently played game, based on the latest played-on date (replacing the planned group-size card).
+
+`StatisticsRefreshService` treats each new event as a reason to refresh from the owner's current database records. This deliberately uses the existing backend/database rather than an independent statistics microservice. Renames, edited plays, deleted plays, and deleted games are reflected on the next refresh; delayed events cannot restore an old snapshot. Users are processed independently, and refreshes for the same user are serialized. Summary changes and the processed-event receipt commit or roll back together.
+
+With no plays, both game highlights are empty. Equal play counts or played-on dates are resolved by game name, then edition (case-insensitive), then ID. Monthly counts keep years separate and are saved for all recorded months, so the read endpoint can select the current month even when no event arrives at midnight. The authenticated endpoint, its current-month selection, and the frontend wiring remain future work.
+
+This slice tests the refresh service directly. It does not start a RabbitMQ receiver or change the polling/batching behavior. Remaining work: validate and consume messages with safe acknowledgements and retry/dead-letter handling; backfill existing users; expose an owner-scoped statistics API; connect the four UI cards; then improve publisher batching.
 
 Run the focused persistence tests against a disposable PostgreSQL database/schema with the usual database environment settings:
 
 ```powershell
 cd backend
-.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,BoardGameOutboxTests,RabbitMqPublisherTests,OutboxDispatcherTests,StatisticsProcessedEventTests,GamePlayApiTests,BoardGameEditionTests'
+.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,BoardGameOutboxTests,RabbitMqPublisherTests,OutboxDispatcherTests,StatisticsProcessedEventTests,StatisticsRefreshTests,GamePlayApiTests,BoardGameEditionTests'
 ```
 
 Flyway applies migrations before the tests and JPA validates the schema. Persistence/API test rows roll back; the outbox service tests exercise actual commits and clean up their own records. Migrations remain; do not point this command at production.
