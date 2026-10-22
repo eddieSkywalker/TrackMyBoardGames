@@ -11,7 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.SwampDragonInn.trackmyboardgames.domain.OutboxEvent;
 import com.SwampDragonInn.trackmyboardgames.repository.OutboxEventRepository;
 
-// Short database transactions claim events and record publish results; no broker call happens while a DB lock is held.
+// Handles the short database steps around sending an event: reserve a due event, then save whether it was sent
+// or needs another try. The dispatcher talks to RabbitMQ separately, so the database row is not locked during
+// a network call.
 @Service
 public class OutboxClaimService
 {
@@ -20,11 +22,13 @@ public class OutboxClaimService
 
 	private final OutboxEventRepository repository;
 
+	// Uses the repository that reads and updates saved outbox events.
 	public OutboxClaimService(OutboxEventRepository repository)
 	{
 		this.repository = repository;
 	}
 
+	// Finds one event ready to send and reserves it for 30 seconds so another worker will not send it too.
 	@Transactional
 	public Optional<OutboxEvent> claimNext(Instant now)
 	{
@@ -38,6 +42,7 @@ public class OutboxClaimService
 				});
 	}
 
+	// Saves RabbitMQ's successful confirmation and releases the event's reservation.
 	@Transactional
 	public void markPublished(UUID eventId, UUID claimToken, Instant publishedAt)
 	{
@@ -45,6 +50,7 @@ public class OutboxClaimService
 		event.markPublished(claimToken, publishedAt);
 	}
 
+	// Saves the failed attempt and when the sender is allowed to try this event again.
 	@Transactional
 	public void scheduleRetry(UUID eventId, UUID claimToken, Instant nextAttemptAt, String errorType)
 	{

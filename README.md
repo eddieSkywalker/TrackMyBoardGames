@@ -150,9 +150,9 @@ The backend now includes the RabbitMQ Java client and, when explicitly enabled, 
 
 When enabled, the application declares a durable topic exchange (`trackmyboardgames.events`), a durable statistics queue bound with `#`, and a durable dead-letter exchange/queue route. The publisher sends persistent JSON messages with the outbox event ID, event type/version, owner ID, aggregate ID, and occurrence time. It waits for a publisher confirmation before returning successfully.
 
-The outbox polling/claim worker now sends at most one due event every five seconds while RabbitMQ is enabled. It briefly locks and claims a row in PostgreSQL, commits that claim, publishes without holding a database transaction, waits for RabbitMQ's publisher confirmation, and only then marks the row published. If publishing fails, it releases the claim and schedules an exponential retry (starting at five seconds, capped at five minutes). The claim expires after 30 seconds if the process stops unexpectedly.
+When RabbitMQ is enabled, the backend checks for unsent events about once a minute and sends them to RabbitMQ. If a send fails, the backend waits before trying again. If the backend stops while working on an event, it can safely be picked up later.
 
-This is an at-least-once publisher: if RabbitMQ accepts a message but the backend loses the confirmation or cannot mark the database row published, the event can be sent again after its claim expires. The future receiver must deduplicate by the outbox event ID. Consumer acknowledgements, processing retries, and DLQ inspection/replay remain later work.
+An event may occasionally be sent more than once, so the future statistics receiver will need to recognize repeats. Building that receiver and its failure handling is still future work. The polling interval defaults to one minute and can be changed with `RABBITMQ_POLL_INTERVAL_MS`.
 
 For local development, `backend/config/application-local.properties` is a Git-ignored profile-specific settings file. Add the AMQP URI from a separate development CloudAMQP instance there, then start the backend with the `local` Spring profile active. Spring loads these settings in addition to `application.properties`; local-profile values override matching base values, while environment variables can override either file.
 

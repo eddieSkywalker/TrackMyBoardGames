@@ -14,7 +14,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-// One durable event waiting to be published. The receiver will track processing separately.
+// One change the app has saved and still needs to send to RabbitMQ. This class tracks sending and retries,
+// not what the statistics service does after it receives the message.
 @Entity
 @Table(name = "outbox_events")
 public class OutboxEvent
@@ -63,8 +64,10 @@ public class OutboxEvent
 
 	protected OutboxEvent()
 	{
+		// JPA needs an empty constructor so it can rebuild an event from a database row.
 	}
 
+	// Creates a new event that is ready for the sender to pick up.
 	public OutboxEvent(
         String eventType, 
         int eventVersion, 
@@ -94,71 +97,85 @@ public class OutboxEvent
 		this.nextAttemptAt = occurredAt;
 	}
 
+	// Returns this event's database ID.
 	public UUID getId()
 	{
 		return this.id;
 	}
 
+	// Returns the name of the change, such as "GameUpdated".
 	public String getEventType()
 	{
 		return this.eventType;
 	}
 
+	// Returns which version of this event's message format is being used.
 	public int getEventVersion()
 	{
 		return this.eventVersion;
 	}
 
+	// Returns the ID of the user who owns the changed data.
 	public UUID getOwnerId()
 	{
 		return this.ownerId;
 	}
 
+	// Returns the ID of the game or play that changed.
 	public UUID getAggregateId()
 	{
 		return this.aggregateId;
 	}
 
+	// Returns the saved event details that will be sent to RabbitMQ.
 	public String getPayload()
 	{
 		return this.payload;
 	}
 
+	// Returns when the original game or play change happened.
 	public Instant getOccurredAt()
 	{
 		return this.occurredAt;
 	}
 
+	// Returns when RabbitMQ confirmed that this event was sent, or null if it has not been sent yet.
 	public Instant getPublishedAt()
 	{
 		return this.publishedAt;
 	}
 
+	// Returns how many times the sender has tried to send this event.
 	public int getAttemptCount()
 	{
 		return this.attemptCount;
 	}
 
+	// Returns the earliest time the sender may try to send this event again.
 	public Instant getNextAttemptAt()
 	{
 		return this.nextAttemptAt;
 	}
 
+	// Returns the ID that proves which sender currently owns this event, or null if it is unclaimed.
 	public UUID getClaimToken()
 	{
 		return this.claimToken;
 	}
 
+	// Returns when another sender may take over if the current sender stops responding.
 	public Instant getClaimedUntil()
 	{
 		return this.claimedUntil;
 	}
 
+	// Returns the type of the last sending error, or null if there has not been one.
 	public String getLastError()
 	{
 		return this.lastError;
 	}
 
+	// Reserves this event for one sender and counts the new sending attempt.
 	public void claim(UUID claimToken, Instant claimedUntil)
 	{
 		if (this.publishedAt != null)
@@ -171,6 +188,7 @@ public class OutboxEvent
 		this.attemptCount++;
 	}
 
+	// Records that RabbitMQ confirmed the send and frees the event for no further attempts.
 	public void markPublished(UUID claimToken, Instant publishedAt)
 	{
 		requireCurrentClaim(claimToken);
@@ -179,6 +197,7 @@ public class OutboxEvent
 		this.lastError = null;
 	}
 
+	// Records a failed send so the sender can try again later.
 	public void scheduleRetry(UUID claimToken, Instant nextAttemptAt, String errorType)
 	{
 		requireCurrentClaim(claimToken);
@@ -187,6 +206,7 @@ public class OutboxEvent
 		clearClaim();
 	}
 
+	// Stops an old sender from changing an event that has since been claimed by another sender.
 	private void requireCurrentClaim(UUID claimToken)
 	{
 		if (this.claimToken == null || !this.claimToken.equals(claimToken))
@@ -195,6 +215,7 @@ public class OutboxEvent
 		}
 	}
 
+	// Clears the reservation after a send succeeds or a retry is scheduled.
 	private void clearClaim()
 	{
 		this.claimToken = null;

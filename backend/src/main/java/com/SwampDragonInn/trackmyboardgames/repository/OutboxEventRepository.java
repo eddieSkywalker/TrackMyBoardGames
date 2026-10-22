@@ -14,11 +14,12 @@ import com.SwampDragonInn.trackmyboardgames.domain.OutboxEvent;
 
 import jakarta.persistence.LockModeType;
 
-// Internal persistence only: outbox payloads must not be exposed as a user-facing API.
+// Reads and writes the outbox table in PostgreSQL. The dispatcher uses this repository indirectly to find the
+// oldest event that has not been sent yet and is ready for another attempt.
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID>
 {
 
-	// Lock the next eligible row so concurrent backend instances cannot claim it at the same time.
+	// Finds the oldest due event and locks its row while a worker reserves it, preventing two workers from taking it together.
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 			select event from OutboxEvent event
@@ -27,5 +28,6 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID>
 				and (event.claimedUntil is null or event.claimedUntil <= :now)
 			order by event.occurredAt, event.id
 			""")
+	// The page size is limited by the caller so each polling check handles only one event.
 	List<OutboxEvent> findNextPublishable(@Param("now") Instant now, Pageable pageable);
 }

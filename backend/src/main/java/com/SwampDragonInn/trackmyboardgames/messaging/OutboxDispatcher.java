@@ -13,7 +13,8 @@ import org.springframework.stereotype.Service;
 import com.SwampDragonInn.trackmyboardgames.domain.OutboxEvent;
 import com.rabbitmq.client.ShutdownSignalException;
 
-// Polls PostgreSQL, publishes one claimed event, then records success or schedules a retry.
+// Sends one event at a time after the polling worker asks it to. It does not watch for database changes itself:
+// it asks PostgreSQL for an event that is due, sends it to RabbitMQ, then saves success or a retry time.
 @Service
 @ConditionalOnProperty(prefix = "app.messaging.rabbitmq", name = "enabled", havingValue = "true")
 public class OutboxDispatcher
@@ -26,13 +27,14 @@ public class OutboxDispatcher
 	private final OutboxClaimService claimService;
 	private final RabbitMqPublisher publisher;
 
+	// Uses the database service to reserve and update events, and the publisher to send them to RabbitMQ.
 	public OutboxDispatcher(OutboxClaimService claimService, RabbitMqPublisher publisher)
 	{
 		this.claimService = claimService;
 		this.publisher = publisher;
 	}
 
-	// Returns false when there is no due event; otherwise reports that one event was attempted.
+	// Tries to send one event that is ready. Returns false if there is no event to send right now.
 	public boolean publishNext()
 	{
 		Optional<OutboxEvent> nextEvent = this.claimService.claimNext(Instant.now());
@@ -76,6 +78,7 @@ public class OutboxDispatcher
 		return true;
 	}
 
+	// Waits longer between retries after repeated failures, up to the five-minute limit.
 	private long retryDelaySeconds(int attemptCount)
 	{
 		int exponent = Math.min(Math.max(attemptCount - 1, 0), 6);
