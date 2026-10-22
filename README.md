@@ -142,7 +142,7 @@ Existing-data backfill is not wired yet.
 
 Adding, editing, or deleting a game now saves a corresponding version-1 outbox event (`GameAdded`, `GameUpdated`, or `GameDeleted`) in the same transaction as the game change. The payload snapshots the game's ID, name, and edition, which lets a future statistics consumer respond to collection changes and game renames. Deleting a game still cascades to its play history, while its outbox event remains independent of the deleted row.
 
-We are proceeding with hosted RabbitMQ (CloudAMQP) rather than SQS. This choice does not change the outbox or event creation. The RabbitMQ publisher adapter and outbox polling worker are implemented; the message consumer is still future work.
+We are proceeding with hosted RabbitMQ (CloudAMQP) rather than SQS. This choice does not change the outbox or event creation. The publisher, outbox polling worker, and opt-in statistics consumer are implemented.
 
 ### RabbitMQ connection and routing - fifth slice
 
@@ -152,7 +152,7 @@ When enabled, the application declares a durable topic exchange (`trackmyboardga
 
 When RabbitMQ is enabled, the backend checks for unsent events about once a minute and sends them to RabbitMQ. If a send fails, the backend waits before trying again. If the backend stops while working on an event, it can safely be picked up later.
 
-An event may occasionally be sent more than once, so the future statistics receiver will need to recognize repeats. Building that receiver and its failure handling is still future work. The polling interval defaults to one minute and can be changed with `RABBITMQ_POLL_INTERVAL_MS`.
+An event may occasionally be sent more than once; the statistics receiver recognizes repeats using processed-event receipts. The publisher polling interval defaults to one minute and can be changed with `RABBITMQ_POLL_INTERVAL_MS`.
 
 For local development, `backend/config/application-local.properties` is a Git-ignored profile-specific settings file. Add the AMQP URI from a separate development CloudAMQP instance there, then start the backend with the `local` Spring profile active. Spring loads these settings in addition to `application.properties`; local-profile values override matching base values, while environment variables can override either file.
 
@@ -162,9 +162,9 @@ The file enables RabbitMQ but starts with an empty URI. Add the URI before start
 
 Migration V10 adds `statistics_processed_events`, a receipt book for events the statistics receiver has handled. Each event ID can appear only once, even if two receivers try to record it at the same time. Receipts do not depend on game, play, user, or outbox rows, so deleting those records will not make a repeated event look new.
 
-The repository requires an existing transaction when recording a receipt. The future receiver must record the receipt and update statistics together: a new receipt means continue processing; an existing receipt means skip the duplicate. If processing fails, both changes must roll back so a later delivery can try again. RabbitMQ must only be acknowledged after the transaction succeeds.
+The repository requires an existing transaction when recording a receipt. The receiver records the receipt and updates statistics together: a new receipt means continue processing; an existing receipt means skip the duplicate. If processing fails, both changes roll back so a later delivery can try again. RabbitMQ is only acknowledged after the transaction succeeds.
 
-The receipt table provides duplicate protection; the refresh service below uses it when calculating statistics. No RabbitMQ consumer is started yet. The publisher's one-event-per-check behavior is unchanged; batch delivery remains a separate improvement.
+The receipt table provides duplicate protection; the refresh service below uses it when calculating statistics. The publisher's one-event-per-check behavior is unchanged; batch delivery remains a separate improvement.
 
 ### Statistics calculations and saved cards
 
@@ -179,13 +179,23 @@ Migration V11 adds one saved statistics summary per owner for the first four car
 
 With no plays, both game highlights are empty. Equal play counts or played-on dates are resolved by game name, then edition (case-insensitive), then ID. Monthly counts keep years separate and are saved for all recorded months, so the read endpoint can select the current month even when no event arrives at midnight. The authenticated endpoint, its current-month selection, and the frontend wiring remain future work.
 
-This slice tests the refresh service directly. It does not start a RabbitMQ receiver or change the polling/batching behavior. Remaining work: validate and consume messages with safe acknowledgements and retry/dead-letter handling; backfill existing users; expose an owner-scoped statistics API; connect the four UI cards; then improve publisher batching.
+### Statistics RabbitMQ receiver
+
+`StatisticsMessageConsumer` listens for messages pushed from the statistics queue; it does not use the outbox polling timer. Enable it explicitly with `RABBITMQ_CONSUMER_ENABLED=true` (or `app.messaging.rabbitmq.consumer-enabled=true` in private local settings), alongside RabbitMQ's existing enable flag and URI. It is disabled by default because enabling it starts processing and removing successfully handled messages immediately. Use a development instance first.
+
+The receiver uses its own connection/channel, requests one unfinished message at a time, and validates the known event type, version, IDs, and JSON-object payload. The refresh service commits its database work before the receiver acknowledges the message. Duplicate events are acknowledged without recalculating again. Invalid messages and non-transient processing failures are rejected to the existing statistics dead-letter queue.
+
+A temporary database failure is requeued immediately on its first delivery. If a message is already marked redelivered and processing fails again, it goes to the dead-letter queue rather than looping indefinitely. RabbitMQ's redelivery flag can also mean recovery from a lost connection; it is not an exact retry counter. This deliberately conservative policy does not provide delayed retries or automatic DLQ replay. Inspect the DLQ and fix the underlying issue before manually replaying messages. Logs include delivery/event IDs and error types, not message bodies or exception text.
+
+Automatic connection recovery is enabled. A broker-side consumer cancellation is logged as an error and requires checking the queue and restarting the receiver. Lost acknowledgements can cause redelivery, which the committed receipts make safe. Tests cover the RabbitMQ channel boundary with mocks and verify committed receipts/statistics before acknowledgement using real PostgreSQL; a live CloudAMQP end-to-end check is still required.
+
+Remaining work: existing-user backfill; an owner-scoped statistics API; the four UI cards; publisher batching; and live end-to-end verification. No UI statistics endpoint has been added yet.
 
 Run the focused persistence tests against a disposable PostgreSQL database/schema with the usual database environment settings:
 
 ```powershell
 cd backend
-.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,BoardGameOutboxTests,RabbitMqPublisherTests,OutboxDispatcherTests,StatisticsProcessedEventTests,StatisticsRefreshTests,GamePlayApiTests,BoardGameEditionTests'
+.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,BoardGameOutboxTests,RabbitMqPublisherTests,OutboxDispatcherTests,StatisticsProcessedEventTests,StatisticsRefreshTests,StatisticsMessageConsumerTests,StatisticsConsumerIntegrationTests,GamePlayApiTests,BoardGameEditionTests'
 ```
 
 Flyway applies migrations before the tests and JPA validates the schema. Persistence/API test rows roll back; the outbox service tests exercise actual commits and clean up their own records. Migrations remain; do not point this command at production.

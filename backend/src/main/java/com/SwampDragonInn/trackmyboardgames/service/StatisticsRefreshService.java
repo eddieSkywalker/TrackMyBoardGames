@@ -20,7 +20,7 @@ import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSourceRepositor
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSourceRepository.MonthTotal;
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSummaryRepository;
 
-// Rebuilds the four statistics cards when the future receiver delivers a game or play event.
+// Rebuilds the four statistics cards when the receiver delivers a game or play event.
 // The event is a prompt to check current records, not an instruction to add or subtract one:
 // that makes late-arriving events safe, including edits and deletions. The saved cards and the
 // event's receipt commit together; a failed refresh rolls both back so RabbitMQ can retry.
@@ -44,7 +44,7 @@ public class StatisticsRefreshService
 	}
 
 	// Refreshes one owner's cards for a new event. Returns false when the same event was already handled.
-	// Only the future validated receiver (or a controlled backfill) should call this; it is not a public API.
+	// Only the validated receiver (or a controlled backfill) should call this; it is not a public API.
 	@Transactional
 	public boolean refresh(UUID eventId, UUID ownerId)
 	{
