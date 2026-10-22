@@ -128,7 +128,7 @@ Flyway runs migrations from `backend/src/main/resources/db/migration` at backend
 
 Migration V9 adds `outbox_events`, a shared holding table for multiple event types. Each row records an event's type/version, owner and source identifiers, JSON object payload, occurrence time, and publication/retry/claim metadata. Source identifiers are intentionally not cascading foreign keys so deletion events can outlive deleted records.
 
-An empty `published_at` means not yet confirmed published to the message service; it does not mean "not processed by the receiver." Receiver deduplication will use a separate table in a later slice.
+An empty `published_at` means not yet confirmed published to the message service; it does not mean "not processed by the receiver." Receiver duplicate protection uses the separate table described below.
 
 ### Play history events - third slice
 
@@ -158,11 +158,19 @@ For local development, `backend/config/application-local.properties` is a Git-ig
 
 The file enables RabbitMQ but starts with an empty URI. Add the URI before starting with the `local` profile, or the backend will report a clear startup configuration error. Never put broker credentials in tracked files or use a production broker for local development.
 
+### Statistics duplicate protection
+
+Migration V10 adds `statistics_processed_events`, a receipt book for events the statistics receiver has handled. Each event ID can appear only once, even if two receivers try to record it at the same time. Receipts do not depend on game, play, user, or outbox rows, so deleting those records will not make a repeated event look new.
+
+The repository requires an existing transaction when recording a receipt. The future receiver must record the receipt and update statistics together: a new receipt means continue processing; an existing receipt means skip the duplicate. If processing fails, both changes must roll back so a later delivery can try again. RabbitMQ must only be acknowledged after the transaction succeeds.
+
+This slice provides and tests duplicate protection only. It does not start a RabbitMQ consumer, acknowledge queued messages, or calculate statistics yet. The publisher's one-event-per-check behavior is unchanged; batch delivery remains a separate improvement.
+
 Run the focused persistence tests against a disposable PostgreSQL database/schema with the usual database environment settings:
 
 ```powershell
 cd backend
-.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,BoardGameOutboxTests,RabbitMqPublisherTests,OutboxDispatcherTests,GamePlayApiTests,BoardGameEditionTests'
+.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,BoardGameOutboxTests,RabbitMqPublisherTests,OutboxDispatcherTests,StatisticsProcessedEventTests,GamePlayApiTests,BoardGameEditionTests'
 ```
 
 Flyway applies migrations before the tests and JPA validates the schema. Persistence/API test rows roll back; the outbox service tests exercise actual commits and clean up their own records. Migrations remain; do not point this command at production.
