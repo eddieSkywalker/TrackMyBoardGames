@@ -177,7 +177,7 @@ Migration V11 adds one saved statistics summary per owner for the first four car
 
 `StatisticsRefreshService` treats each new event as a reason to refresh from the owner's current database records. This deliberately uses the existing backend/database rather than an independent statistics microservice. Renames, edited plays, deleted plays, and deleted games are reflected on the next refresh; delayed events cannot restore an old snapshot. Users are processed independently, and refreshes for the same user are serialized. Summary changes and the processed-event receipt commit or roll back together.
 
-With no plays, both game highlights are empty. Equal play counts or played-on dates are resolved by game name, then edition (case-insensitive), then ID. Monthly counts keep years separate and are saved for all recorded months, so the read endpoint can select the current month even when no event arrives at midnight. The authenticated endpoint is described below; frontend wiring remains future work.
+With no plays, both game highlights are empty. Equal play counts or played-on dates are resolved by game name, then edition (case-insensitive), then ID. Monthly counts keep years separate and are saved for all recorded months, so the read endpoint can select the current month even when no event arrives at midnight. The authenticated endpoint and collection-page display are described below.
 
 ### Statistics RabbitMQ receiver
 
@@ -201,11 +201,19 @@ Rerunning safely replaces summaries with recalculated values, rather than adding
 
 `GET /api/statistics` returns the signed-in user's four saved cards in one request. It requires an Auth0 token with `read:games`; the issuer and subject select the owner, not a browser-supplied user ID. Reading does not recalculate statistics, create a profile, or send messages. Responses use `Cache-Control: no-store`.
 
-The response includes `ready`, `collectionSize`, `mostPlayed`, `playsThisMonth`, `mostRecentlyPlayed`, `month` (`YYYY-MM`), `timezone`, and `refreshedAt`. Game highlights include ID, name, edition, play count, and most recent played-on date. The current calendar month is selected using UTC, explicitly returned as `timezone: "UTC"`; it does not depend on the server's local timezone. A user-local calendar is not implemented yet.
+The response includes `collectionSize`, `mostPlayed`, `playsThisMonth`, `mostRecentlyPlayed`, `month` (`YYYY-MM`), `timezone`, and `refreshedAt`. Game highlights include ID, name, edition, play count, and most recent played-on date. The current calendar month is selected using UTC, explicitly returned as `timezone: "UTC"`; it does not depend on the server's local timezone. A user-local calendar is not implemented yet.
 
-When no summary exists (including a new identity with no local profile), the endpoint returns HTTP 200 with `ready: false` and null counts/highlights/refresh time. This means "not initialized yet", not "zero games". Backfill or a successfully consumed game/play event initializes the summary. An initialized empty collection instead returns `ready: true`, zero counts, and null game highlights. Saved results are eventually updated by the receiver; `refreshedAt` describes their age, not a guarantee that every pending event has been processed.
+When no summary exists (including a new identity with no local profile), the endpoint returns HTTP 200 with null counts/highlights/refresh time. This means "not initialized yet", not "zero games". Backfill or a successfully consumed game/play event initializes the summary. An initialized empty collection instead returns zero counts and null game highlights. Saved results are eventually updated by the receiver; `refreshedAt` describes their age, not a guarantee that every pending event has been processed.
 
-Remaining work: the four UI cards; publisher batching; and live end-to-end verification. Backfill and the receiver still need to be enabled deliberately in the intended development environment.
+### Collection-page statistics
+
+The collection page displays collection size, most-played game, plays this month, and most recently played game above the game list. It requests the signed-in user's saved statistics when the component opens. Game selections include their edition when present, and the monthly count is labeled with its month and UTC timezone.
+
+Loading and request errors have separate messages, with no "not calculated yet" message. Missing results display as blank values rather than suggesting an uninitialized collection has zero games. Actual zero counts still display as zero. A calculated collection with no plays leaves the two game selections blank, and a missing calculation time is omitted.
+
+Statistics are fetched when the collection page opens, with no statistics refresh button, frontend polling timer, or live push update. Refreshing the browser or navigating away and returning reads the latest saved results and retries a failed request. These reads do not recalculate statistics or send events. The backend continues processing game/play changes independently; an already-open page keeps its displayed results until it is reopened or refreshed. The displayed calculation time helps explain how old the results are.
+
+Remaining work: publisher batching and live end-to-end verification. Backfill and the receiver still need to be enabled deliberately in the intended development environment.
 
 Run the focused persistence tests against a disposable PostgreSQL database/schema with the usual database environment settings:
 

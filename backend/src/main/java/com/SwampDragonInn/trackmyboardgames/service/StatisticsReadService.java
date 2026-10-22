@@ -42,12 +42,12 @@ public class StatisticsReadService
 
 		if (summary == null)
 		{
-			// Tell the page the statistics are not ready yet; do not pretend the user has zero games.
-			return new StatisticsResponse(false, null, null, null, null, month.toString(), "UTC", null);
+			// Leave missing results empty; do not pretend the user has zero games.
+			return new StatisticsResponse(null, null, null, null, month.toString(), "UTC", null);
 		}
 
 		// Send back the four cards and when they were last calculated.
-		return new StatisticsResponse(true, summary.getCollectionSize(), summary.getMostPlayed(),
+		return new StatisticsResponse(summary.getCollectionSize(), summary.getMostPlayed(),
 				summary.getPlaysForMonth(month), summary.getMostRecentlyPlayed(),
 				month.toString(), "UTC", summary.getRefreshedAt());
 	}

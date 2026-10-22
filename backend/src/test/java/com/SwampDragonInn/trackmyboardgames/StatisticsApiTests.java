@@ -80,7 +80,7 @@ class StatisticsApiTests
 		this.mvc.perform(get("/api/statistics").with(token(ISSUER, subject)))
 				.andExpect(status().isOk())
 				.andExpect(header().string("Cache-Control", "no-store"))
-				.andExpect(jsonPath("$.ready").value(true))
+				.andExpect(jsonPath("$.ready").doesNotExist())
 				.andExpect(jsonPath("$.collectionSize").value(12))
 				.andExpect(jsonPath("$.mostPlayed.gameId").value(mostPlayedId.toString()))
 				.andExpect(jsonPath("$.mostPlayed.name").value("Azul"))
@@ -106,7 +106,7 @@ class StatisticsApiTests
 
 		this.mvc.perform(get("/api/statistics").with(token(ISSUER, subject)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.ready").value(true))
+				.andExpect(jsonPath("$.ready").doesNotExist())
 				.andExpect(jsonPath("$.collectionSize").value(0))
 				.andExpect(jsonPath("$.playsThisMonth").value(0))
 				.andExpect(jsonPath("$.mostPlayed").value(nullValue()))
@@ -141,7 +141,7 @@ class StatisticsApiTests
 		this.mvc.perform(get("/api/statistics").param("ownerId", owner.getId().toString())
 					.with(token(ISSUER, "other-" + UUID.randomUUID())))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.ready").value(false))
+				.andExpect(jsonPath("$.ready").doesNotExist())
 				.andExpect(jsonPath("$.collectionSize").value(nullValue()));
 		assertPending("https://other-issuer.test/", subject);
 	}
@@ -150,7 +150,7 @@ class StatisticsApiTests
 	{
 		this.mvc.perform(get("/api/statistics").with(token(issuer, subject)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.ready").value(false))
+				.andExpect(jsonPath("$.ready").doesNotExist())
 				.andExpect(jsonPath("$.collectionSize").value(nullValue()))
 				.andExpect(jsonPath("$.playsThisMonth").value(nullValue()))
 				.andExpect(jsonPath("$.mostPlayed").value(nullValue()))

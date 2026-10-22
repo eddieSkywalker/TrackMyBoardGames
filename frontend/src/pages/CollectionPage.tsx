@@ -6,13 +6,14 @@ import BoardGameForm from '../components/BoardGameForm'
 import BoardGameCollection from '../components/BoardGameCollection'
 import DeleteConfirmationDialog from '../components/DeleteConfirmationDialog'
 import ShelfBackground from '../components/ShelfBackground'
+import CollectionStatistics from '../components/CollectionStatistics'
 import { apiAudience, apiBaseUrl, responseError } from '../api/apiHelpers'
 import type { BoardGame, GameFormValues } from '../types/boardGame'
 
 // Shows the signed-in user's games and lets them add games to their own collection.
 function CollectionPage()
 {
-    const { getAccessTokenSilently } = useAuth0()
+    const { getAccessTokenSilently, user } = useAuth0()
     const [games, setGames] = useState<BoardGame[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
@@ -225,6 +226,11 @@ function CollectionPage()
                     </div>
                 </div>
                 </ShelfBackground>
+
+                {/* Changing accounts changes the key, so React clears the previous account's statistics.
+                    If Auth0 has not supplied a user ID (sub), ?? uses 'signed-in-user' as a temporary key.
+                    This key only helps React track the component; it is not sent to the backend. */}
+                <CollectionStatistics key={user?.sub ?? 'signed-in-user'} />
 
                 {errorMessage && (
                     <p className="alert alert-soft alert-error mt-5 text-sm in-data-[theme=boardgame-light]:border-[#e2b6a9] in-data-[theme=boardgame-light]:bg-[#f7e9e5] in-data-[theme=boardgame-light]:text-[#792c23]" role="alert">
