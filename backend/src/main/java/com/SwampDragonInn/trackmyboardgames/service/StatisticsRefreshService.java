@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.SwampDragonInn.trackmyboardgames.domain.StatisticsSummary;
-import com.SwampDragonInn.trackmyboardgames.domain.StatisticsSummary.GameHighlight;
+import com.SwampDragonInn.trackmyboardgames.domain.StatisticsSummary.GameSummary;
 import com.SwampDragonInn.trackmyboardgames.repository.AppUserRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsProcessedEventRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSourceRepository;
@@ -100,8 +100,8 @@ public class StatisticsRefreshService
 				.thenComparing(game -> game.getEdition(), String.CASE_INSENSITIVE_ORDER)
 				.thenComparing(game -> game.getGameId());
 
-		GameHighlight mostPlayed = findMostPlayed(games, alphabetical);
-		GameHighlight mostRecent = findMostRecentlyPlayed(games, alphabetical);
+		GameSummary mostPlayed = findMostPlayed(games, alphabetical);
+		GameSummary mostRecent = findMostRecentlyPlayed(games, alphabetical);
 		Map<String, Long> months = countPlaysByMonth(ownerId);
 
 		// Save all four cards together. The number of game totals is the collection size.
@@ -110,8 +110,8 @@ public class StatisticsRefreshService
 		this.summaries.saveAndFlush(summary);
 	}
 
-	// Chooses the game with the highest play count; games with no plays cannot win this card.
-	private GameHighlight findMostPlayed(List<GameTotals> games, Comparator<GameTotals> alphabetical)
+	// Chooses the game with the highest play count, leaving out games that have never been played.
+	private GameSummary findMostPlayed(List<GameTotals> games, Comparator<GameTotals> alphabetical)
 	{
 		Comparator<GameTotals> mostPlaysFirst = Comparator
 				.comparingLong((GameTotals game) -> game.getPlayCount())
@@ -122,12 +122,12 @@ public class StatisticsRefreshService
 				.filter(game -> game.getPlayCount() > 0)
 				.sorted(mostPlaysFirst)
 				.findFirst()
-				.map(game -> highlight(game))
+				.map(game -> toGameSummary(game))
 				.orElse(null);
 	}
 
 	// Chooses the game with the newest played-on date, ignoring games that have never been played.
-	private GameHighlight findMostRecentlyPlayed(List<GameTotals> games, Comparator<GameTotals> alphabetical)
+	private GameSummary findMostRecentlyPlayed(List<GameTotals> games, Comparator<GameTotals> alphabetical)
 	{
 		Comparator<GameTotals> newestDateFirst = Comparator
 				.comparing((GameTotals game) -> game.getLastPlayedOn())
@@ -138,7 +138,7 @@ public class StatisticsRefreshService
 				.filter(game -> game.getLastPlayedOn() != null)
 				.sorted(newestDateFirst)
 				.findFirst()
-				.map(game -> highlight(game))
+				.map(game -> toGameSummary(game))
 				.orElse(null);
 	}
 
@@ -154,10 +154,10 @@ public class StatisticsRefreshService
 		return months;
 	}
 
-	// Copies only the fields needed to display a winning game on a card.
-	private GameHighlight highlight(GameTotals game)
+	// Copies the game's name and play details into the small object used by either game card.
+	private GameSummary toGameSummary(GameTotals game)
 	{
-		return new GameHighlight(
+		return new GameSummary(
             game.getGameId(), 
             game.getName(), 
             game.getEdition(),

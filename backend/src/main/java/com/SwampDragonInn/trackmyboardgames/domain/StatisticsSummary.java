@@ -15,15 +15,17 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-// The saved answers for one user's four statistics cards. Events refresh these answers in the background,
-// so a future statistics request will not need to count the user's full play history again.
+// The saved answers for one user's four statistics cards. Game and play changes update these answers
+// in the background, so opening the page can show them without counting the full history again.
 @Entity
 @Table(name = "statistics_summaries")
 public class StatisticsSummary
 {
 
-	// Identifies a winning game without loading its cover image or private notes.
-	public record GameHighlight(UUID gameId, String name, String edition, long playCount, LocalDate lastPlayedOn)
+	// The details shown for one game on the "most played" or "most recently played" card.
+	// Each card has its own GameSummary; they may describe different games.
+	// Collection size and plays this month are separate counts, not part of this object.
+	public record GameSummary(UUID gameId, String name, String edition, long playCount, LocalDate lastPlayedOn)
 	{
 	}
 
@@ -36,11 +38,11 @@ public class StatisticsSummary
 
 	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "most_played", columnDefinition = "jsonb")
-	private GameHighlight mostPlayed;
+	private GameSummary mostPlayed;
 
 	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "most_recently_played", columnDefinition = "jsonb")
-	private GameHighlight mostRecentlyPlayed;
+	private GameSummary mostRecentlyPlayed;
 
 	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "monthly_plays", nullable = false, columnDefinition = "jsonb")
@@ -55,8 +57,8 @@ public class StatisticsSummary
 	}
 
 	// Builds the replacement answers after counting the owner's current games and plays.
-	public StatisticsSummary(UUID ownerId, long collectionSize, GameHighlight mostPlayed,
-			GameHighlight mostRecentlyPlayed, Map<String, Long> monthlyPlays, Instant refreshedAt)
+	public StatisticsSummary(UUID ownerId, long collectionSize, GameSummary mostPlayed,
+			GameSummary mostRecentlyPlayed, Map<String, Long> monthlyPlays, Instant refreshedAt)
 	{
 		this.ownerId = Objects.requireNonNull(ownerId, "Owner ID is required.");
 		this.collectionSize = collectionSize;
@@ -66,7 +68,7 @@ public class StatisticsSummary
 		this.refreshedAt = Objects.requireNonNull(refreshedAt, "Refresh time is required.");
 	}
 
-	// Returns whose statistics these are; the future API must use the signed-in user's ID.
+	// Returns the ID of the user these statistics belong to.
 	public UUID getOwnerId()
 	{
 		return this.ownerId;
@@ -79,13 +81,13 @@ public class StatisticsSummary
 	}
 
 	// Returns the game with the most plays, or null when no games have been played.
-	public GameHighlight getMostPlayed()
+	public GameSummary getMostPlayed()
 	{
 		return this.mostPlayed;
 	}
 
 	// Returns the game with the latest played-on date, not the latest date a play was entered.
-	public GameHighlight getMostRecentlyPlayed()
+	public GameSummary getMostRecentlyPlayed()
 	{
 		return this.mostRecentlyPlayed;
 	}

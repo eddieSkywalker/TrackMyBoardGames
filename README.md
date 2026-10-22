@@ -177,7 +177,7 @@ Migration V11 adds one saved statistics summary per owner for the first four car
 
 `StatisticsRefreshService` treats each new event as a reason to refresh from the owner's current database records. This deliberately uses the existing backend/database rather than an independent statistics microservice. Renames, edited plays, deleted plays, and deleted games are reflected on the next refresh; delayed events cannot restore an old snapshot. Users are processed independently, and refreshes for the same user are serialized. Summary changes and the processed-event receipt commit or roll back together.
 
-With no plays, both game highlights are empty. Equal play counts or played-on dates are resolved by game name, then edition (case-insensitive), then ID. Monthly counts keep years separate and are saved for all recorded months, so the read endpoint can select the current month even when no event arrives at midnight. The authenticated endpoint, its current-month selection, and the frontend wiring remain future work.
+With no plays, both game highlights are empty. Equal play counts or played-on dates are resolved by game name, then edition (case-insensitive), then ID. Monthly counts keep years separate and are saved for all recorded months, so the read endpoint can select the current month even when no event arrives at midnight. The authenticated endpoint is described below; frontend wiring remains future work.
 
 ### Statistics RabbitMQ receiver
 
@@ -197,13 +197,21 @@ The job is disabled by default. To run it against a deliberately selected develo
 
 Rerunning safely replaces summaries with recalculated values, rather than adding counts again. A failure stops startup with an error; earlier users remain committed, and the failing user's transaction rolls back. Fix the cause and rerun. Accounts deleted before their calculation are logged and skipped. This is not a snapshot of all users at one instant: new accounts created during a run may need a later event or another run. The job does not scan continuously or run on browser refresh.
 
-Remaining work: an owner-scoped statistics API; the four UI cards; publisher batching; and live end-to-end verification. No UI statistics endpoint has been added yet.
+### Reading statistics
+
+`GET /api/statistics` returns the signed-in user's four saved cards in one request. It requires an Auth0 token with `read:games`; the issuer and subject select the owner, not a browser-supplied user ID. Reading does not recalculate statistics, create a profile, or send messages. Responses use `Cache-Control: no-store`.
+
+The response includes `ready`, `collectionSize`, `mostPlayed`, `playsThisMonth`, `mostRecentlyPlayed`, `month` (`YYYY-MM`), `timezone`, and `refreshedAt`. Game highlights include ID, name, edition, play count, and most recent played-on date. The current calendar month is selected using UTC, explicitly returned as `timezone: "UTC"`; it does not depend on the server's local timezone. A user-local calendar is not implemented yet.
+
+When no summary exists (including a new identity with no local profile), the endpoint returns HTTP 200 with `ready: false` and null counts/highlights/refresh time. This means "not initialized yet", not "zero games". Backfill or a successfully consumed game/play event initializes the summary. An initialized empty collection instead returns `ready: true`, zero counts, and null game highlights. Saved results are eventually updated by the receiver; `refreshedAt` describes their age, not a guarantee that every pending event has been processed.
+
+Remaining work: the four UI cards; publisher batching; and live end-to-end verification. Backfill and the receiver still need to be enabled deliberately in the intended development environment.
 
 Run the focused persistence tests against a disposable PostgreSQL database/schema with the usual database environment settings:
 
 ```powershell
 cd backend
-.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,BoardGameOutboxTests,RabbitMqPublisherTests,OutboxDispatcherTests,StatisticsProcessedEventTests,StatisticsRefreshTests,StatisticsBackfillRunnerTests,StatisticsMessageConsumerTests,StatisticsConsumerIntegrationTests,GamePlayApiTests,BoardGameEditionTests'
+.\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,BoardGameOutboxTests,RabbitMqPublisherTests,OutboxDispatcherTests,StatisticsProcessedEventTests,StatisticsRefreshTests,StatisticsBackfillRunnerTests,StatisticsMessageConsumerTests,StatisticsConsumerIntegrationTests,StatisticsApiTests,GamePlayApiTests,BoardGameEditionTests'
 ```
 
 Flyway applies migrations before the tests and JPA validates the schema. Persistence/API test rows roll back; the outbox service tests exercise actual commits and clean up their own records. Migrations remain; do not point this command at production.
