@@ -115,9 +115,9 @@ function CollectionStatistics({ games }: { games: BoardGame[] })
                     Could not load your statistics. {state.message} Refresh the page to try again.
                 </p>
             )}
-            <div className="mx-auto grid min-w-0 max-w-3xl auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mx-auto grid min-w-0 max-w-3xl auto-rows-fr grid-cols-2 gap-3 lg:grid-cols-4">
                 {cards.map(card => (
-                    <div key={card.title} className="flex min-w-0 flex-col rounded-box border border-base-300 bg-base-100 p-5 text-center shadow-sm">
+                    <div key={card.title} className="flex min-w-0 cursor-default flex-col rounded-box border border-base-300 bg-base-100 p-5 text-center shadow-sm">
                         <h3 className="text-sm font-semibold text-base-content/70">{card.title}</h3>
                         <div className={card.isCount
                             ? 'mt-2 flex min-w-0 flex-1 items-center justify-center'
