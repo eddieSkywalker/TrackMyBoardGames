@@ -1,5 +1,7 @@
 # SQS Statistics - Architecture View
 
+**Deprecated proposal:** SQS was not selected. Kept for historical context; see [the current RabbitMQ statistics architecture](../eda-architecture-statistics-component.md).
+
 **Status:** Proposed design. No queues, workers, or statistics endpoints are deployed by this document.
 
 This view explains **where the pieces run**. For the order of operations, see [the sequence view](SQS-EVENT-FLOW.md).

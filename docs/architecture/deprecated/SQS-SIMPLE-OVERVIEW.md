@@ -1,5 +1,7 @@
 # SQS Statistics - Start Here
 
+**Deprecated proposal:** SQS was not selected. Kept for historical context; see [the current RabbitMQ statistics architecture](../eda-architecture-statistics-component.md).
+
 **Proposed design, not yet implemented.** Read this first diagram from left to right. It shows just one example: someone records a play and an open dashboard updates afterward.
 
 ```mermaid
@@ -132,6 +134,6 @@ The detailed diagrams cover recovery when something fails. Those mechanisms supp
 ## Which diagram should I read?
 
 1. **This document:** the basic idea and its relationship to RabbitMQ.
-   For a small picture focused only on the messaging pieces, see [EDA building blocks](EDA-BUILDING-BLOCKS.md).
+   For a small picture focused only on the messaging pieces, see [SQS EDA building blocks](SQS-EDA-BUILDING-BLOCKS.md).
 2. [Architecture view](SQS-ARCHITECTURE.md): where the pieces run. Its numbered labels are rough milestones, not one continuous path through every arrow.
 3. [Sequence view](SQS-EVENT-FLOW.md): detailed order, including retries and failure cases.

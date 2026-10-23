@@ -1,5 +1,7 @@
 # Bringing TrackMyBoardGames Online
 
+Run command examples from the repository root unless a step says otherwise.
+
 This document explains the high-level architecture and the setup work used to
 bring the development app online. For commands and detailed deployment
 instructions, see [the deployment guide](AWS-Amplify-Beanstalk-Deployment.md).

@@ -6,6 +6,13 @@ A web app for managing a personal board-game collection, recording plays, and re
 
 See [BUILD_PLAN.md](BUILD_PLAN.md) for planned milestones and release goals.
 
+Architecture and planning guides live in [docs/architecture](docs/architecture):
+
+- [Statistics architecture](docs/architecture/eda-architecture-statistics-component.md): current RabbitMQ flow, retries, and dead-letter handling.
+- [Hosting overview](docs/architecture/APP-HOSTING-FLOW.md) and [deployment guide](docs/architecture/AWS-Amplify-Beanstalk-Deployment.md).
+- [Future features](docs/architecture/FUTURE_FEATURES.md) and [paid-tier plan](docs/architecture/PAID-TIER-BUSINESS-MODEL.md).
+- [Deprecated SQS proposals](docs/architecture/deprecated): historical designs, not the current implementation.
+
 ## Technology
 
 - **Frontend:** React 19, TypeScript, Vite 8, Tailwind CSS, React Router, Auth0 React SDK, ESLint
@@ -19,6 +26,7 @@ See [BUILD_PLAN.md](BUILD_PLAN.md) for planned milestones and release goals.
 backend/       Spring Boot API and Flyway migrations
 frontend/      React single-page application
 auth0/         Auth0 Actions, account-policy tests, and deployment instructions
+docs/architecture/  Architecture, deployment, and planning guides; historical designs in deprecated/
 BUILD_PLAN.md  Milestones, build plan, and roadmap
 ```
 
@@ -207,11 +215,11 @@ When no summary exists (including a new identity with no local profile), the end
 
 ### Collection-page statistics
 
-The collection page displays collection size, most-played game, plays this month, and most recently played game above the game list. It requests the signed-in user's saved statistics when the component opens. Game selections include their edition when present, and the monthly count is labeled with its month and UTC timezone.
+The collection page displays Collection, Most Popular!, Plays This Month!, and Latest To The Table! above the game list. It requests the signed-in user's saved statistics when the component opens. Counts use large numeric text. Game selections show their title/edition and cover image when available, reusing covers from the collection's existing game request rather than fetching them separately. There are no detail captions or calculation-time messages.
 
 Loading and request errors have separate messages, with no "not calculated yet" message. Missing results display as blank values rather than suggesting an uninitialized collection has zero games. Actual zero counts still display as zero. A calculated collection with no plays leaves the two game selections blank, and a missing calculation time is omitted.
 
-Statistics are fetched when the collection page opens, with no statistics refresh button, frontend polling timer, or live push update. Refreshing the browser or navigating away and returning reads the latest saved results and retries a failed request. These reads do not recalculate statistics or send events. The backend continues processing game/play changes independently; an already-open page keeps its displayed results until it is reopened or refreshed. The displayed calculation time helps explain how old the results are.
+Statistics are fetched when the collection page opens, with no statistics refresh button, frontend polling timer, or live push update. Refreshing the browser or navigating away and returning reads the latest saved results and retries a failed request. These reads do not recalculate statistics or send events. The backend continues processing game/play changes independently; an already-open page keeps its displayed results until it is reopened or refreshed.
 
 Remaining work: publisher batching and live end-to-end verification. Backfill and the receiver still need to be enabled deliberately in the intended development environment.
 

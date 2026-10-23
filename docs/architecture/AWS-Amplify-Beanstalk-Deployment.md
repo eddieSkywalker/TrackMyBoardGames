@@ -1,5 +1,7 @@
 # Track My Board Games: AWS Deployment Guide
 
+Run command examples from the repository root unless a step says otherwise.
+
 This guide covers:
 
 1. React frontend deployment to AWS Amplify Hosting.

@@ -230,7 +230,7 @@ function CollectionPage()
                 {/* Changing accounts changes the key, so React clears the previous account's statistics.
                     If Auth0 has not supplied a user ID (sub), ?? uses 'signed-in-user' as a temporary key.
                     This key only helps React track the component; it is not sent to the backend. */}
-                <CollectionStatistics key={user?.sub ?? 'signed-in-user'} />
+                <CollectionStatistics key={user?.sub ?? 'signed-in-user'} games={games} />
 
                 {errorMessage && (
                     <p className="alert alert-soft alert-error mt-5 text-sm in-data-[theme=boardgame-light]:border-[#e2b6a9] in-data-[theme=boardgame-light]:bg-[#f7e9e5] in-data-[theme=boardgame-light]:text-[#792c23]" role="alert">

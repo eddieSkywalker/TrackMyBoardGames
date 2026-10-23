@@ -1,4 +1,6 @@
-# EDA Building Blocks
+# SQS EDA Building Blocks
+
+**Deprecated proposal:** SQS was not selected. Kept for historical context; see [the current RabbitMQ statistics architecture](../eda-architecture-statistics-component.md).
 
 **Proposed design, not yet implemented.** This picture focuses on messaging, not the browser or every database operation.
 

@@ -1,5 +1,7 @@
 # SQS Statistics - Sequence View
 
+**Deprecated proposal:** SQS was not selected. Kept for historical context; see [the current RabbitMQ statistics architecture](../eda-architecture-statistics-component.md).
+
 **Status:** Proposed design, not implemented behavior.
 
 This view explains **what happens over time** when a play is recorded. The same design applies to game/play edits and deletes. See [the architecture view](SQS-ARCHITECTURE.md) for hosting boundaries.
