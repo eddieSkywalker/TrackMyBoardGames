@@ -38,7 +38,7 @@ Build a personal board-game library and play tracker. Each user manages a privat
 - **Repeatable deployment:** Automate certificate renewal and package the JAR plus configuration in a repeatable deployment ZIP.
 - **Verification:** Verify trusted HTTPS, renewal, and authenticated frontend-to-backend workflows before considering the milestone complete.
 
-- See [the hosting flow overview](APP-HOSTING-FLOW.md) for the architecture and service responsibilities, and [the deployment guide](AWS-Amplify-Beanstalk-Deployment.md) for build, configuration, and deployment steps.
+- See [the hosting flow overview](docs/architecture/APP-HOSTING-FLOW.md) for the architecture and service responsibilities, and [the deployment guide](docs/architecture/AWS-Amplify-Beanstalk-Deployment.md) for build, configuration, and deployment steps.
 
 ## Build Loop
 

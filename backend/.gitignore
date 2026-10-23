@@ -1,6 +1,7 @@
 HELP.md
 target/
 config/application-neon.properties
+config/application-local.properties
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

@@ -8,7 +8,7 @@ Duplicate-email registration/login restrictions are implemented, and authenticat
 
 ## Event-driven architecture learning path
 
-**Status:** Candidate for discussion, not approved implementation.
+**Status:** The statistics outbox/RabbitMQ path is implemented. See [the current statistics architecture](eda-architecture-statistics-component.md). The learning sequence below records the original approach; monitoring, replay tooling, publisher batching, and production hardening remain follow-up work.
 
 ### Goal and first use case
 
