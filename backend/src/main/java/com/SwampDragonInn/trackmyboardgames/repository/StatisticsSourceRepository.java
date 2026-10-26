@@ -10,8 +10,13 @@ import org.springframework.data.repository.query.Param;
 
 import com.SwampDragonInn.trackmyboardgames.domain.BoardGame;
 
-// Counts the original records only during a background refresh. These queries select small summaries,
-// not game images or private notes, and always limit results to one owner.
+/**
+ * Reads current game and play records to supply totals for statistics calculations.
+ *
+ * <p>The statistics refresh service uses these queries during event processing and startup backfill.
+ * They return small sets of totals for one owner, not game images or private notes. This repository
+ * does not save calculated statistics or track which RabbitMQ events have been processed.
+ */
 public interface StatisticsSourceRepository extends Repository<BoardGame, UUID>
 {
 
@@ -30,7 +35,12 @@ public interface StatisticsSourceRepository extends Repository<BoardGame, UUID>
 		long getPlayCount();
 	}
 
-	// Includes unplayed games so they still count toward collection size.
+	/**
+	 * Loads each game's play count and most recent played-on date for one owner.
+	 *
+	 * @param ownerId ID of the user whose games to summarize
+	 * @return totals for every owned game, including unplayed games so they count toward collection size
+	 */
 	@Query("""
 			select g.id as gameId, g.name as name, g.edition as edition,
 				count(p.id) as playCount, max(p.playedOn) as lastPlayedOn
@@ -40,7 +50,12 @@ public interface StatisticsSourceRepository extends Repository<BoardGame, UUID>
 			""")
 	List<GameTotals> findGameTotals(@Param("ownerId") UUID ownerId);
 
-	// Uses the date the game was played, and keeps years separate (January 2026 is not January 2027).
+	/**
+	 * Counts an owner's plays by the year and month of their played-on dates.
+	 *
+	 * @param ownerId ID of the user whose plays to count
+	 * @return monthly totals with year-month keys, keeping January 2026 separate from January 2027
+	 */
 	@Query(value = """
 			select to_char(p.played_on, 'YYYY-MM') as month, count(*) as "playCount"
 			from game_plays p join board_games g on g.id = p.board_game_id

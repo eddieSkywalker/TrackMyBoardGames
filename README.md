@@ -217,7 +217,7 @@ When no summary exists (including a new identity with no local profile), the end
 
 The collection page displays Collection, Most Popular!, Plays This Month!, and Latest To The Table! above the game list. It requests the signed-in user's saved statistics when the component opens. Counts use large numeric text. Game selections show their title/edition and cover image when available, reusing covers from the collection's existing game request rather than fetching them separately. There are no detail captions or calculation-time messages.
 
-Loading and request errors have separate messages, with no "not calculated yet" message. Missing results display as blank values rather than suggesting an uninitialized collection has zero games. Actual zero counts still display as zero. A calculated collection with no plays leaves the two game selections blank, and a missing calculation time is omitted.
+Loading and request errors have separate messages, with no "not calculated yet" message. Missing counts display as dashes rather than suggesting an uninitialized collection has zero games. Actual zero counts still display as zero. Missing game selections stay blank.
 
 Statistics are fetched when the collection page opens, with no statistics refresh button, frontend polling timer, or live push update. Refreshing the browser or navigating away and returning reads the latest saved results and retries a failed request. These reads do not recalculate statistics or send events. The backend continues processing game/play changes independently; an already-open page keeps its displayed results until it is reopened or refreshed.
 

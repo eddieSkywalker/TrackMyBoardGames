@@ -39,6 +39,7 @@ function BoardGameForm({ initialGame, isSaving, onCancel, onSubmit }: BoardGameF
         setCover(await blobToDataUrl(image))
     }
 
+    // Handle form submission by calling the onSubmit propagated from the parent component, CollectionPage.tsx.
     async function handleSubmit(event: FormEvent<HTMLFormElement>)
     {
         event.preventDefault()

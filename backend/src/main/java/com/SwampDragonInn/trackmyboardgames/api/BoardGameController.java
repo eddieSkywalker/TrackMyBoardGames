@@ -4,6 +4,8 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
+import javax.swing.Spring;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -54,9 +56,12 @@ public class BoardGameController
     }
 
     // Create a game owned by the signed-in user and return its new URL.
+    // React sends an HTTP request containing JSON
+    // → Spring converts the body into BoardGameRequest i.e. @RequestBody type
+    // → Spring checks its validation rules i.e. @Valid
+    // → Your create() method receives the object
     @PostMapping
-    public ResponseEntity<BoardGameResponse> create(@AuthenticationPrincipal Jwt jwt,
-            @Valid @RequestBody BoardGameRequest request)
+    public ResponseEntity<BoardGameResponse> create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody BoardGameRequest request)
     {
         BoardGameResponse game = this.boardGameService.create(jwt.getIssuer().toString(), jwt.getSubject(), request);
         return ResponseEntity.created(URI.create("/api/games/" + game.id())).body(game);
@@ -64,8 +69,7 @@ public class BoardGameController
 
     // Replace a game’s details, but only when it belongs to the signed-in user.
     @PutMapping("/{gameId}")
-    public BoardGameResponse update(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID gameId,
-            @Valid @RequestBody BoardGameRequest request)
+    public BoardGameResponse update(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID gameId, @Valid @RequestBody BoardGameRequest request)
     {
         return this.boardGameService.update(jwt.getIssuer().toString(), jwt.getSubject(), gameId, request);
     }

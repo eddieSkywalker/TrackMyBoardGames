@@ -24,10 +24,12 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID>
 	@Query("""
 			select event from OutboxEvent event
 			where event.publishedAt is null
+				and event.attemptCount < :maxAttempts
 				and event.nextAttemptAt <= :now
 				and (event.claimedUntil is null or event.claimedUntil <= :now)
 			order by event.occurredAt, event.id
 			""")
-	// The page size is limited by the caller so each polling check handles only one event.
-	List<OutboxEvent> findNextPublishable(@Param("now") Instant now, Pageable pageable);
+	// Each claim reserves one event; exhausted events stay saved but are excluded from automatic publishing.
+	List<OutboxEvent> findNextPublishable(
+			@Param("now") Instant now, @Param("maxAttempts") int maxAttempts, Pageable pageable);
 }
