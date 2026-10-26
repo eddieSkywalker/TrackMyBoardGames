@@ -20,9 +20,13 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-// Receives messages from the statistics queue; this is a RabbitMQ listener, not a database polling timer.
-// It checks each message, asks the transactional service to recalculate the cards, then tells RabbitMQ
-// the message is finished. Repeated deliveries are safe because the service remembers processed IDs.
+/**
+ * Receives game and play change messages from the RabbitMQ statistics queue.
+ *
+ * <p>For each message, it checks that the message is supported, asks the statistics service to recalculate
+ * and save the owner's statistics, then acknowledges successful processing to RabbitMQ. Repeated deliveries
+ * are safe because the service records which event IDs it has already handled.
+ */
 public class StatisticsMessageConsumer implements AutoCloseable
 {
 
@@ -35,7 +39,14 @@ public class StatisticsMessageConsumer implements AutoCloseable
 	private final StatisticsRefreshService statistics;
 	private final JsonMapper jsonMapper;
 
-	// Uses a separate connection/channel so sending and receiving do not share channel state.
+	/**
+	 * Creates the message receiver with its RabbitMQ connection and statistics dependencies.
+	 *
+	 * @param connection RabbitMQ connection used by this receiver
+	 * @param channel RabbitMQ channel used to receive and acknowledge messages
+	 * @param statistics service that recalculates and saves an owner's statistics summary
+	 * @param jsonMapper reads the JSON event details
+	 */
 	public StatisticsMessageConsumer(Connection connection, Channel channel,
 			StatisticsRefreshService statistics, JsonMapper jsonMapper)
 	{
@@ -45,8 +56,14 @@ public class StatisticsMessageConsumer implements AutoCloseable
 		this.jsonMapper = jsonMapper;
 	}
 
-	// Lets RabbitMQ deliver one unfinished message at a time. Automatic acknowledgements are disabled:
-	// receiving a message is not the same as successfully saving the statistics.
+	/**
+	 * Starts listening to the statistics queue with manual message acknowledgements.
+	 *
+	 * <p>RabbitMQ sends one unacknowledged message at a time. The receiver only acknowledges after the
+	 * statistics transaction succeeds; merely receiving a message does not mean it was processed.
+	 *
+	 * @throws IOException if the consumer cannot be registered with RabbitMQ
+	 */
 	public void start() throws IOException
 	{
 		this.channel.basicQos(1);
@@ -55,16 +72,22 @@ public class StatisticsMessageConsumer implements AutoCloseable
 				consumerTag -> LOGGER.error("RabbitMQ cancelled the statistics consumer; check the queue and restart the receiver."));
 	}
 
-	// A successful service return means its database transaction has committed, including for a duplicate.
-	// Acknowledgement failures are not treated as processing failures: RabbitMQ may redeliver, and the
-	// committed event receipt will prevent another statistics update.
+	/**
+	 * Checks and processes one RabbitMQ delivery, then acknowledges, retries, or rejects it.
+	 *
+	 * <p>The statistics service returns only after its database transaction commits. Invalid messages are
+	 * rejected without requeueing; temporary database failures can receive one immediate retry.
+	 *
+	 * @param delivery message and RabbitMQ delivery details
+	 * @throws IOException if a RabbitMQ acknowledgement or rejection cannot be sent
+	 */
 	public void handleDelivery(Delivery delivery) throws IOException
 	{
 		long deliveryTag = delivery.getEnvelope().getDeliveryTag();
-		MessageIdentity identity;
+		MessageContext messageContext;
 		try
 		{
-			identity = validate(delivery);
+			messageContext = validate(delivery);
 		}
 		catch (IllegalArgumentException | JacksonException invalidMessage)
 		{
@@ -76,7 +99,7 @@ public class StatisticsMessageConsumer implements AutoCloseable
 
 		try
 		{
-			this.statistics.refresh(identity.eventId(), identity.ownerId());
+			this.statistics.refresh(messageContext.eventId(), messageContext.ownerId());
 		}
 		catch (RuntimeException processingFailure)
 		{
@@ -85,7 +108,7 @@ public class StatisticsMessageConsumer implements AutoCloseable
 			boolean retry = processingFailure instanceof TransientDataAccessException
 					&& !delivery.getEnvelope().isRedeliver();
 			LOGGER.error("Statistics event {} failed ({}); {}",
-					identity.eventId(), processingFailure.getClass().getSimpleName(),
+					messageContext.eventId(), processingFailure.getClass().getSimpleName(),
 					retry ? "requeueing for one immediate retry" : "sending to the dead-letter queue");
 			this.channel.basicNack(deliveryTag, false, retry);
 			return;
@@ -94,35 +117,63 @@ public class StatisticsMessageConsumer implements AutoCloseable
 		this.channel.basicAck(deliveryTag, false);
 	}
 
-	// Only known version-1 messages may trigger a refresh. Their JSON details are checked as an object,
-	// but calculations use current database records rather than applying an old message snapshot.
-	private MessageIdentity validate(Delivery delivery)
+	/**
+	 * Checks that a delivery has the supported event type, version, identifiers, and JSON shape.
+	 *
+	 * <p>The payload is checked as a JSON object, but its old details are not used to calculate totals.
+	 * The statistics service reads the owner's current game and play records instead.
+	 *
+	 * @param delivery message and RabbitMQ delivery details to check
+	 * @return the event ID used for duplicate detection and the owner ID whose statistics need recalculation
+	 * @throws IllegalArgumentException if required metadata or payload structure is invalid
+	 * @throws JacksonException if the payload is not valid JSON
+	 */
+	private MessageContext validate(Delivery delivery)
 	{
 		AMQP.BasicProperties properties = delivery.getProperties();
+
+		// First make sure the message has JSON content and names an event this application understands.
 		if (properties == null || !"application/json".equals(properties.getContentType())
 				|| properties.getType() == null || !EVENT_TYPES.contains(properties.getType()))
 		{
 			throw new IllegalArgumentException("Unsupported statistics message.");
 		}
 
+		// Reject event versions this consumer does not know how to interpret.
 		Map<String, Object> headers = properties.getHeaders();
 		if (headers == null || !Integer.valueOf(1).equals(headers.get("eventVersion")))
 		{
 			throw new IllegalArgumentException("Unsupported statistics event version.");
 		}
 
+		// The event ID identifies this exact change; the owner ID identifies whose statistics to rebuild.
 		UUID eventId = parseId(properties.getMessageId());
 		UUID ownerId = parseId(headers.get("ownerId"));
+
+		// Check that the changed game or play ID is present and correctly formatted, even though totals
+		// are recalculated from current database records rather than from that one item.
 		parseId(headers.get("aggregateId"));
+
+		// Require a JSON object so malformed or unrelated payloads do not enter statistics processing.
 		JsonNode payload = this.jsonMapper.readTree(delivery.getBody());
 		if (payload == null || !payload.isObject())
 		{
 			throw new IllegalArgumentException("Statistics payload must be a JSON object.");
 		}
-		return new MessageIdentity(eventId, ownerId);
+
+		return new MessageContext(eventId, ownerId);
 	}
 
-	// AMQP can return text headers as LongString rather than String; both have a text representation.
+	/**
+	 * Converts a message identifier or header value into a UUID.
+	 *
+	 * <p>RabbitMQ may provide text headers as a LongString rather than a Java String, so the value is
+	 * converted to text before parsing.
+	 *
+	 * @param value raw message property or header value
+	 * @return parsed UUID
+	 * @throws IllegalArgumentException if the value is missing or is not a full UUID
+	 */
 	private UUID parseId(Object value)
 	{
 		if (value == null)
@@ -138,11 +189,19 @@ public class StatisticsMessageConsumer implements AutoCloseable
 		return id;
 	}
 
-	private record MessageIdentity(UUID eventId, UUID ownerId)
+	private record MessageContext(UUID eventId, UUID ownerId)
 	{
 	}
 
-	// Closing the channel returns unfinished messages to RabbitMQ instead of marking them successful.
+	/**
+	 * Closes the channel and connection to RabbitMQ.
+	 *
+	 * <p>Messages not yet acknowledged are returned to RabbitMQ for later delivery; they are not marked
+	 * as successfully processed.
+	 *
+	 * @throws IOException if closing the channel or connection fails
+	 * @throws TimeoutException if RabbitMQ does not complete the close operation in time
+	 */
 	@Override
 	public void close() throws IOException, TimeoutException
 	{

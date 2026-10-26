@@ -38,6 +38,16 @@ public class BoardGameService
 	private final OutboxEventRepository outboxEventRepository;
 	private final JsonMapper jsonMapper;
 
+	/**
+	 * Supplies the helpers used to save games, read play totals, and record game-change events.
+	 *
+	 * @param boardGameRepository reads and saves games in the database
+	 * @param gamePlayRepository reads recorded plays and their totals
+	 * @param userProfileService finds or creates the signed-in user's local account
+	 * @param imageUploadChecker checks that a submitted cover is an allowed image
+	 * @param outboxEventRepository saves game-change events for later delivery
+	 * @param jsonMapper converts event details into JSON text
+	 */
 	public BoardGameService(BoardGameRepository boardGameRepository, GamePlayRepository gamePlayRepository,
 			UserProfileService userProfileService, ImageUploadChecker imageUploadChecker,
 			OutboxEventRepository outboxEventRepository, JsonMapper jsonMapper)
@@ -50,7 +60,14 @@ public class BoardGameService
 		this.jsonMapper = jsonMapper;
 	}
 
-	// List the owner's games alphabetically, optionally filtering by name, each with its play totals.
+	/**
+	 * Lists the signed-in user's games in name order, including each game's play totals.
+	 *
+	 * @param subjectIssuer identifies the login provider
+	 * @param subject identifies the signed-in user within that provider
+	 * @param search limits results to names containing this text; null or blank includes all games
+	 * @return the matching games and their play totals for the collection page
+	 */
 	@Transactional
 	public List<BoardGameResponse> findAll(String subjectIssuer, String subject, String search)
 	{
@@ -70,7 +87,15 @@ public class BoardGameService
 		return responses;
 	}
 
-	// Return one game only when it belongs to the authenticated user.
+	/**
+	 * Gets one game from the signed-in user's collection.
+	 *
+	 * @param subjectIssuer identifies the login provider
+	 * @param subject identifies the signed-in user within that provider
+	 * @param gameId identifies the game to look up
+	 * @return the game details and its play totals
+	 * @throws ResponseStatusException if the game is missing or belongs to someone else
+	 */
 	@Transactional
 	public BoardGameResponse findById(String subjectIssuer, String subject, UUID gameId)
 	{
@@ -79,7 +104,14 @@ public class BoardGameService
 		return toResponse(findOwnedGame(owner.getId(), gameId), loadStats(gameId, owner.getId()));
 	}
 
-	// Validate the submitted details and save the new game under the authenticated user.
+	/**
+	 * Saves a new game in the signed-in user's collection and records its game-added event.
+	 *
+	 * @param subjectIssuer identifies the login provider
+	 * @param subject identifies the signed-in user within that provider
+	 * @param request contains the new board game's details entered in the form
+	 * @return the saved game details sent back to the page
+	 */
 	@Transactional
 	public BoardGameResponse create(String subjectIssuer, String subject, BoardGameRequest request)
 	{
@@ -87,10 +119,12 @@ public class BoardGameService
 		AppUser owner = this.userProfileService.findOrCreate(subjectIssuer, subject);
 		String name = request.name().trim();
 		String edition = cleanEdition(request.edition());
+
 		if (this.boardGameRepository.existsByOwner_IdAndNameIgnoreCaseAndEditionIgnoreCase(owner.getId(), name, edition))
 		{
 			throw duplicateGame();
 		}
+
 		BoardGame game = new BoardGame(owner, name, edition, request.minPlayers(),
 				request.maxPlayers(), request.bestPlayers(), request.playTimeMinutes(), request.notes());
 
@@ -101,7 +135,15 @@ public class BoardGameService
 		return toResponse(savedGame, null);
 	}
 
-	// Validate and replace the details of an existing game owned by this user.
+	/**
+	 * Saves edits to a game in the signed-in user's collection and records its game-updated event.
+	 *
+	 * @param subjectIssuer identifies the login provider
+	 * @param subject identifies the signed-in user within that provider
+	 * @param gameId identifies the game being edited
+	 * @param request contains the replacement game details entered in the form
+	 * @return the updated game details and its existing play totals
+	 */
 	@Transactional
 	public BoardGameResponse update(String subjectIssuer, String subject, UUID gameId, BoardGameRequest request)
 	{
@@ -110,10 +152,12 @@ public class BoardGameService
 		BoardGame game = findOwnedGame(owner.getId(), gameId);
 		String name = request.name().trim();
 		String edition = cleanEdition(request.edition());
+
 		if (this.boardGameRepository.existsByOwner_IdAndNameIgnoreCaseAndEditionIgnoreCaseAndIdNot(owner.getId(), name, edition, gameId))
 		{
 			throw duplicateGame();
 		}
+
 		game.updateDetails(name, edition, request.minPlayers(), request.maxPlayers(),
 				request.bestPlayers(), request.playTimeMinutes(), request.notes());
 		applyCover(game, request.coverImage());
@@ -123,7 +167,13 @@ public class BoardGameService
 		return toResponse(savedGame, loadStats(gameId, owner.getId()));
 	}
 
-	// Delete the requested game only if it belongs to the authenticated user.
+	/**
+	 * Deletes a game from the signed-in user's collection and records its game-deleted event.
+	 *
+	 * @param subjectIssuer identifies the login provider
+	 * @param subject identifies the signed-in user within that provider
+	 * @param gameId identifies the game to delete
+	 */
 	@Transactional
 	public void delete(String subjectIssuer, String subject, UUID gameId)
 	{
@@ -134,7 +184,15 @@ public class BoardGameService
 		saveGameEvent("GameDeleted", owner.getId(), game, deletedAt);
 	}
 
-	// Keep the game snapshot even for deletion, after the source row has been removed.
+	/**
+	 * Saves a note about a game change so the background sender can deliver it later.
+	 * The note keeps the game's identifying details even if the game is being deleted.
+	 *
+	 * @param eventType names the change, such as GameAdded, GameUpdated, or GameDeleted
+	 * @param ownerId identifies the user whose game changed
+	 * @param game supplies the game's ID, name, and edition for the saved note
+	 * @param occurredAt records when the change happened
+	 */
 	private void saveGameEvent(String eventType, UUID ownerId, BoardGame game, Instant occurredAt)
 	{
 		GameSnapshot payload = new GameSnapshot(game.getId(), game.getName(), game.getEdition());
@@ -146,11 +204,17 @@ public class BoardGameService
 				this.jsonMapper.writeValueAsString(payload),
 				occurredAt);
 
-		// The event and game change commit or roll back together.
+		// Save both the event and game change commit or roll back together.
 		this.outboxEventRepository.save(event);
 	}
 
-	// Get the owner's games in name order ; a blank search means no filtering.
+	/**
+	 * Reads one user's games in name order, optionally narrowing the list by name.
+	 *
+	 * @param ownerId identifies the user whose collection to read
+	 * @param search the name text to match; null or blank includes all games
+	 * @return the matching saved games
+	 */
 	private List<BoardGame> findGamesByOwner(UUID ownerId, String search)
 	{
 		boolean hasSearch = search != null && !search.isBlank();
@@ -163,7 +227,12 @@ public class BoardGameService
 		return this.boardGameRepository.findAllByOwner_IdOrderByNameAsc(ownerId);
 	}
 
-	// Load play totals for all of the owner's games in one query and index them by game id for quick lookup.
+	/**
+	 * Reads a user's play totals together so they can be matched to games without a query per game.
+	 *
+	 * @param ownerId identifies the user whose play totals to read
+	 * @return play totals grouped by game ID; games with no recorded plays have no entry
+	 */
 	private Map<UUID, PlayStats> loadStatsByGameId(UUID ownerId)
 	{
 		Map<UUID, PlayStats> statsByGameId = new HashMap<>();
@@ -176,13 +245,25 @@ public class BoardGameService
 		return statsByGameId;
 	}
 
-	// Look up one game's play totals; null means the game has never been played.
+	/**
+	 * Reads the play count and latest played-on date for one game.
+	 *
+	 * @param gameId identifies the game whose plays to count
+	 * @param ownerId identifies the user who owns the game
+	 * @return the game's play totals, or null if there are no recorded plays
+	 */
 	private PlayStats loadStats(UUID gameId, UUID ownerId)
 	{
 		return this.gamePlayRepository.findPlayStatsByGame(gameId, ownerId).orElse(null);
 	}
 
-	// Build the response, treating missing stats as zero plays.
+	/**
+	 * Combines a saved game and its play totals into the details sent back to the page.
+	 *
+	 * @param game supplies the saved game details
+	 * @param stats supplies the play totals; null means zero plays and no last-played date
+	 * @return the game details ready to send to the frontend
+	 */
 	private BoardGameResponse toResponse(BoardGame game, PlayStats stats)
 	{
 		if (stats == null)
@@ -194,7 +275,12 @@ public class BoardGameService
 	}
 
 
-	// Save the submitted cover photo, or remove the cover when none was sent.
+	/**
+	 * Checks and applies the submitted cover image, or removes the old cover if none was supplied.
+	 *
+	 * @param game the game whose cover to change
+	 * @param coverImage the image as a data URL; null or blank removes the cover
+	 */
 	private void applyCover(BoardGame game, String coverImage)
 	{
 		if (coverImage == null || coverImage.isBlank())
@@ -207,21 +293,40 @@ public class BoardGameService
 		game.setCover(image.contentType(), image.data());
 	}
 
-	// Treat another user's game the same as a missing game so its existence is not exposed.
+	/**
+	 * Finds a game only within the requested user's collection.
+	 * Another user's game is reported as missing rather than revealing that it exists.
+	 *
+	 * @param ownerId identifies the user whose collection to search
+	 * @param gameId identifies the game to find
+	 * @return the game belonging to that user
+	 * @throws ResponseStatusException with HTTP 404 if no matching game is found
+	 */
 	private BoardGame findOwnedGame(UUID ownerId, UUID gameId)
 	{
 		return this.boardGameRepository.findByIdAndOwner_Id(gameId, ownerId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 	}
 
-	// An edition is optional: missing or blank becomes empty text so "no edition" is stored the same way every time.
+	/**
+	 * Removes surrounding spaces and stores a missing edition as empty text.
+	 *
+	 * @param edition the optional edition entered in the form
+	 * @return the trimmed edition, or empty text if none was supplied
+	 */
 	private String cleanEdition(String edition)
 	{
 		return edition == null ? "" : edition.trim();
 	}
 
-	// Save right away so the database's unique index can reject a duplicate that slipped past the earlier check
-	// (for example two quick clicks); it is reported with the same friendly 409 error.
+	/**
+	 * Writes a game to the database before continuing, so duplicate-name checks run immediately.
+	 * This also catches duplicates that slip past the earlier check, such as two simultaneous saves.
+	 *
+	 * @param game the new or edited game to save
+	 * @return the saved game
+	 * @throws ResponseStatusException with HTTP 409 if the database rejects the save as a conflict
+	 */
 	private BoardGame saveGame(BoardGame game)
 	{
 		try
@@ -234,14 +339,23 @@ public class BoardGameService
 		}
 	}
 
-	// The 409 Conflict error shown when the user already owns this name and edition.
+	/**
+	 * Builds the error explaining that this name and edition are already in the collection.
+	 *
+	 * @return an HTTP 409 error with a message suggesting the Edition field for a different version
+	 */
 	private ResponseStatusException duplicateGame()
 	{
 		return new ResponseStatusException(HttpStatus.CONFLICT,
 				"You already have a game with this name and edition. If this is a different version, add it using the Edition field.");
 	}
 
-	// Check the relationship between optional minimum and maximum player counts.
+	/**
+	 * Checks that the maximum player count is not smaller than the minimum when both are entered.
+	 *
+	 * @param request contains the player counts entered in the game form
+	 * @throws ResponseStatusException with HTTP 400 if the maximum is smaller than the minimum
+	 */
 	private void validatePlayerRange(BoardGameRequest request)
 	{
 		if (request.minPlayers() != null && request.maxPlayers() != null

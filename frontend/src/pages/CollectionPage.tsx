@@ -4,9 +4,8 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import BoardGameForm from '../components/BoardGameForm'
 import BoardGameCollection from '../components/BoardGameCollection'
-import DeleteConfirmationDialog from '../components/DeleteConfirmationDialog'
-import ShelfBackground from '../components/ShelfBackground'
 import CollectionStatistics from '../components/CollectionStatistics'
+import ShelfBackground from '../components/ShelfBackground'
 import { apiAudience, apiBaseUrl, responseError } from '../api/apiHelpers'
 import type { BoardGame, GameFormValues } from '../types/boardGame'
 
@@ -20,7 +19,6 @@ function CollectionPage()
     const [isAddFormOpen, setIsAddFormOpen] = useState(false)
     const [editingGame, setEditingGame] = useState<BoardGame | null>(null)
     const [deletingGameId, setDeletingGameId] = useState<string | null>(null)
-    const [gameToDelete, setGameToDelete] = useState<BoardGame | null>(null)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
     const location = useLocation()
@@ -88,12 +86,15 @@ function CollectionPage()
 
         try
         {
-            const accessToken = await getAccessTokenSilently({
-                authorizationParams: { audience: apiAudience, scope: 'write:games' },
-            })
+            // Determine the access token for the request based on the required scope.
+            const accessToken = await getAccessTokenSilently({authorizationParams: { audience: apiAudience, scope: 'write:games' }})
+            const requestUrl = editingGame
+                ? `${apiBaseUrl}/api/games/${editingGame.id}`
+                : `${apiBaseUrl}/api/games`
+
             // Send the game details and cover photo (null removes it); Spring determines the owner from the validated token.
             const response = await fetch(
-                editingGame ? `${apiBaseUrl}/api/games/${editingGame.id}` : `${apiBaseUrl}/api/games`,
+                requestUrl,
                 {
                     method: editingGame ? 'PUT' : 'POST',
                     headers: {
@@ -118,14 +119,18 @@ function CollectionPage()
                 throw new Error(await responseError(response))
             }
 
+            // Read the saved game returned by the backend and update the list without reloading the page.
             const savedGame = await response.json() as BoardGame
             setGames(currentGames =>
             {
+                // Remove the old version if this was an edit, add the saved version, then sort by name.
                 const updatedGames = currentGames.filter(game => game.id !== savedGame.id)
                 updatedGames.push(savedGame)
                 updatedGames.sort((left, right) => left.name.localeCompare(right.name))
                 return updatedGames
             })
+
+            // Close the form, clear the game being edited, and show the user that the save succeeded.
             setIsAddFormOpen(false)
             setEditingGame(null)
             setSuccessMessage(editingGame
@@ -145,6 +150,8 @@ function CollectionPage()
     // Delete only after the user confirms; the backend still enforces collection ownership.
     async function handleDelete(game: BoardGame)
     {
+        if (!window.confirm(`Delete ${game.name} from your collection?`)) return
+
         setDeletingGameId(game.id)
         setErrorMessage(null)
         setSuccessMessage(null)
@@ -167,6 +174,10 @@ function CollectionPage()
             setGames(currentGames => currentGames.filter(existingGame => existingGame.id !== game.id))
             if (editingGame?.id === game.id) setEditingGame(null)
             setSuccessMessage(`${game.name} was deleted from your collection.`)
+        }
+        catch (error)
+        {
+            setErrorMessage(error instanceof Error ? error.message : 'Could not delete this game.')
         }
         finally
         {
@@ -222,14 +233,12 @@ function CollectionPage()
                 <div className="flex flex-col justify-between gap-6 border-b border-base-300 pb-7 sm:flex-row sm:items-end">
                     <div>
                         <p className="mb-3 text-xs font-bold tracking-[0.16em] text-secondary">YOUR COLLECTION</p>
-                        <h1 className="font-serif text-4xl leading-tight text-base-content sm:text-5xl">Game shelf</h1>
+                        <h1 className="font-serif text-4xl leading-tight text-base-content sm:text-5xl">Game Shelf</h1>
                     </div>
                 </div>
                 </ShelfBackground>
 
-                {/* Changing accounts changes the key, so React clears the previous account's statistics.
-                    If Auth0 has not supplied a user ID (sub), ?? uses 'signed-in-user' as a temporary key.
-                    This key only helps React track the component; it is not sent to the backend. */}
+                {/* Start with fresh statistics when the signed-in account changes. */}
                 <CollectionStatistics key={user?.sub ?? 'signed-in-user'} games={games} />
 
                 {errorMessage && (
@@ -253,10 +262,9 @@ function CollectionPage()
                     />
                 )}
 
-                <div className="mt-8" hidden={isFormOpen}>
+                <div className="mt-8">
                     <div className="mb-3 flex items-baseline justify-between">
                         <h2 className="text-base font-bold text-base-content">Your games</h2>
-                        {!isLoading && <span className="text-xs text-base-content/70">{games.length} {games.length === 1 ? 'game' : 'games'}</span>}
                     </div>
 
                     {isLoading ? (
@@ -281,23 +289,12 @@ function CollectionPage()
                         <BoardGameCollection
                             games={games}
                             onEdit={openEditForm}
-                            onDelete={setGameToDelete}
+                            onDelete={handleDelete}
                             deletingGameId={deletingGameId}
                         />
                     )}
                 </div>
             </section>
-            {gameToDelete && (
-                <DeleteConfirmationDialog
-                    key={gameToDelete.id}
-                    title="Delete game?"
-                    description={`This will permanently delete ${gameToDelete.name} and its associated play history and QR label. This cannot be undone.`}
-                    confirmationValue={gameToDelete.name}
-                    confirmLabel="Delete game"
-                    onConfirm={() => handleDelete(gameToDelete)}
-                    onCancel={() => setGameToDelete(null)}
-                />
-            )}
         </AppLayout>
     )
 }

@@ -83,6 +83,33 @@ class OutboxDispatcherTests
 	}
 
 	@Test
+	void publishBatchAttemptsMultipleDueEventsAndStopsAtConfiguredLimit() throws Exception
+	{
+		OutboxEvent firstEvent = createEvent(Instant.now().minusSeconds(60));
+		OutboxEvent secondEvent = createEvent(Instant.now().minusSeconds(30));
+		createEvent(Instant.now().minusSeconds(10));
+		OutboxDispatcher dispatcher = new OutboxDispatcher(this.claimService, this.publisher);
+
+		assertThat(dispatcher.publishBatch(2)).isEqualTo(2);
+
+		assertThat(this.repository.findById(firstEvent.getId()).orElseThrow().getPublishedAt()).isNotNull();
+		assertThat(this.repository.findById(secondEvent.getId()).orElseThrow().getPublishedAt()).isNotNull();
+		assertThat(this.repository.findAllById(this.testEventIds))
+				.filteredOn(event -> event.getPublishedAt() != null)
+				.hasSize(2);
+		verify(this.publisher, org.mockito.Mockito.times(2)).publish(any(OutboxEvent.class));
+	}
+
+	@Test
+	void publishBatchStopsWhenThereAreNoMoreDueEvents()
+	{
+		createEvent(Instant.now().minusSeconds(60));
+		OutboxDispatcher dispatcher = new OutboxDispatcher(this.claimService, this.publisher);
+
+		assertThat(dispatcher.publishBatch(10)).isEqualTo(1);
+	}
+
+	@Test
 	void activeClaimPreventsAnotherWorkerFromTakingTheSameEvent()
 	{
 		OutboxEvent event = createEvent(Instant.now().minusSeconds(60));
@@ -124,6 +151,67 @@ class OutboxDispatcherTests
 
 		assertThat(dispatcher.publishNext()).isFalse();
 		assertThat(this.repository.findById(event.getId()).orElseThrow().getAttemptCount()).isZero();
+	}
+
+	@Test
+	void fifthFailedPublishStopsFurtherClaimsWithoutBlockingOtherEvents() throws Exception
+	{
+		OutboxEvent event = createEventWithFourAttempts();
+		doThrow(new IOException("Simulated broker failure"))
+				.when(this.publisher).publish(any(OutboxEvent.class));
+		OutboxDispatcher dispatcher = new OutboxDispatcher(this.claimService, this.publisher);
+
+		assertThat(dispatcher.publishNext()).isTrue();
+
+		OutboxEvent exhausted = this.repository.findById(event.getId()).orElseThrow();
+		assertThat(exhausted.getAttemptCount()).isEqualTo(5);
+		assertThat(exhausted.getPublishedAt()).isNull();
+		assertThat(exhausted.getLastError()).isEqualTo("IOException");
+		assertThat(exhausted.getClaimToken()).isNull();
+		assertThat(exhausted.getClaimedUntil()).isNull();
+		assertThat(this.claimService.claimNext(Instant.now().plusSeconds(3600))).isEmpty();
+
+		OutboxEvent anotherEvent = createEvent(Instant.now().minusSeconds(10));
+		assertThat(this.claimService.claimNext(Instant.now())).get()
+				.extracting(OutboxEvent::getId).isEqualTo(anotherEvent.getId());
+		verify(this.publisher).publish(any(OutboxEvent.class));
+	}
+
+	@Test
+	void fifthAttemptCanStillPublishSuccessfully()
+	{
+		OutboxEvent event = createEventWithFourAttempts();
+		OutboxDispatcher dispatcher = new OutboxDispatcher(this.claimService, this.publisher);
+
+		assertThat(dispatcher.publishNext()).isTrue();
+
+		OutboxEvent published = this.repository.findById(event.getId()).orElseThrow();
+		assertThat(published.getAttemptCount()).isEqualTo(5);
+		assertThat(published.getPublishedAt()).isNotNull();
+	}
+
+	@Test
+	void expiredFifthClaimCannotBeClaimedForASixthAttempt()
+	{
+		OutboxEvent event = createEventWithFourAttempts();
+		Instant now = Instant.now();
+
+		assertThat(this.claimService.claimNext(now)).get()
+				.extracting(OutboxEvent::getId).isEqualTo(event.getId());
+		assertThat(this.claimService.claimNext(now.plusSeconds(31))).isEmpty();
+		assertThat(this.repository.findById(event.getId()).orElseThrow().getAttemptCount()).isEqualTo(5);
+	}
+
+	private OutboxEvent createEventWithFourAttempts()
+	{
+		OutboxEvent event = createEvent(Instant.now().minusSeconds(60));
+		for (int attempt = 0; attempt < 4; attempt++)
+		{
+			UUID claimToken = UUID.randomUUID();
+			event.claim(claimToken, Instant.now().plusSeconds(30));
+			event.scheduleRetry(claimToken, Instant.now().minusSeconds(1), "IOException");
+		}
+		return this.repository.saveAndFlush(event);
 	}
 
 	private OutboxEvent createEvent(Instant occurredAt)

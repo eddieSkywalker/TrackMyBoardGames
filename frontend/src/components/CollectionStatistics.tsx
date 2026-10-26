@@ -68,7 +68,7 @@ function CollectionStatistics({ games }: { games: BoardGame[] })
         }
     }, [getAccessTokenSilently])
 
-    // Show the values the backend supplied. Missing counts stay blank; actual zeros display as zero.
+    // Show the values the backend supplied. Missing counts show a dash; actual zeros display as zero.
     const statistics = state.status === 'loaded' ? state.statistics : null
     // Reuse covers already loaded for the collection, matching each selected game by its ID.
     const mostPlayedCover = games.find(game => game.id === statistics?.mostPlayed?.gameId)?.coverImage
@@ -77,7 +77,7 @@ function CollectionStatistics({ games }: { games: BoardGame[] })
     const cards = [
         {
             title: 'Collection',
-            value: statistics?.collectionSize?.toLocaleString() ?? '',
+            value: statistics?.collectionSize?.toLocaleString() ?? '-',
             detail: '',
             isCount: true,
             coverImage: null,
@@ -91,7 +91,7 @@ function CollectionStatistics({ games }: { games: BoardGame[] })
         },
         {
             title: 'Plays This Month!',
-            value: statistics?.playsThisMonth?.toLocaleString() ?? '',
+            value: statistics?.playsThisMonth?.toLocaleString() ?? '-',
             detail: '',
             isCount: true,
             coverImage: null,
@@ -107,7 +107,7 @@ function CollectionStatistics({ games }: { games: BoardGame[] })
 
     return (
         <section className="mt-6" aria-labelledby="collection-statistics-title" aria-busy={state.status === 'loading'}>
-            <h2 id="collection-statistics-title" className="mb-3 text-base font-bold">Statistics</h2>
+            {/* <h2 id="collection-statistics-title" className="mb-3 text-base font-bold">Statistics</h2> */}
 
             {state.status === 'loading' && <p className="mb-3 text-sm text-base-content/70" role="status">Loading your statistics...</p>}
             {state.status === 'error' && (

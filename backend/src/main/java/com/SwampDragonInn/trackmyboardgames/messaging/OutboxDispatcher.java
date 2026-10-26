@@ -13,8 +13,12 @@ import org.springframework.stereotype.Service;
 import com.SwampDragonInn.trackmyboardgames.domain.OutboxEvent;
 import com.rabbitmq.client.ShutdownSignalException;
 
-// Sends one event at a time after the polling worker asks it to. It does not watch for database changes itself:
-// it asks PostgreSQL for an event that is due, sends it to RabbitMQ, then saves success or a retry time.
+/**
+ * Publishes due outbox events when the polling worker asks it to.
+ *
+ * <p>This dispatcher does not watch for database changes. It claims each event from PostgreSQL immediately before
+ * sending it to RabbitMQ, then records whether the send succeeded or should be retried.
+ */
 @Service
 @ConditionalOnProperty(prefix = "app.messaging.rabbitmq", name = "enabled", havingValue = "true")
 public class OutboxDispatcher
@@ -27,15 +31,66 @@ public class OutboxDispatcher
 	private final OutboxClaimService claimService;
 	private final RabbitMqPublisher publisher;
 
-	// Uses the database service to reserve and update events, and the publisher to send them to RabbitMQ.
+	/**
+	 * Creates a dispatcher using the service that claims outbox rows and the RabbitMQ publisher.
+	 *
+	 * @param claimService reserves events and records publish or retry outcomes
+	 * @param publisher sends claimed events to RabbitMQ
+	 */
 	public OutboxDispatcher(OutboxClaimService claimService, RabbitMqPublisher publisher)
 	{
 		this.claimService = claimService;
 		this.publisher = publisher;
 	}
 
-	// Tries to send one event that is ready. Returns false if there is no event to send right now.
+	/**
+	 * Tries to publish one due event.
+	 *
+	 * @return {@code true} if an event was attempted; {@code false} if none was due
+	 */
 	public boolean publishNext()
+	{
+		return publishOne();
+	}
+
+	/**
+	 * Publishes up to the requested number of due events, one at a time.
+	 *
+	 * <p>Each event is claimed immediately before publishing, so later events do not lose their claim leases while
+	 * earlier messages wait for RabbitMQ confirmations.
+	 *
+	 * @param maxEvents maximum number of events to attempt in this polling run; must be positive
+	 * @return the number of events attempted
+	 */
+	public int publishBatch(int maxEvents)
+	{
+		if (maxEvents < 1)
+		{
+			throw new IllegalArgumentException("Batch size must be at least 1.");
+		}
+
+		int attemptedEvents = 0;
+		while (attemptedEvents < maxEvents)
+		{
+			if (!publishOne())
+			{
+				break;
+			}
+            
+			attemptedEvents++;
+            // Check if the current thread has been interrupted and exit the loop if so.
+			if (Thread.currentThread().isInterrupted())
+			{
+				break;
+			}
+		}
+		return attemptedEvents;
+	}
+
+    /** 
+     * Attempts to publish the next due outbox event.
+     */
+	private boolean publishOne()
 	{
 		Optional<OutboxEvent> nextEvent = this.claimService.claimNext(Instant.now());
 		if (nextEvent.isEmpty())
@@ -51,6 +106,7 @@ public class OutboxDispatcher
 		}
 		catch (IOException | InterruptedException | TimeoutException | ShutdownSignalException publishFailure)
 		{
+            // Schedule a retry for this event since publishing failed.
 			long retryDelay = retryDelaySeconds(event.getAttemptCount());
 			try
 			{
@@ -66,8 +122,8 @@ public class OutboxDispatcher
 			}
 
 			// Log event identity and exception type only; do not log a URI that could contain credentials.
-			LOGGER.warn("Could not publish outbox event {} ({}); retry scheduled in {} seconds ({})",
-					event.getId(), event.getEventType(), retryDelay, publishFailure.getClass().getSimpleName());
+			LOGGER.warn("Could not publish outbox event {} ({}) on attempt {} ({})",
+					event.getId(), event.getEventType(), event.getAttemptCount(), publishFailure.getClass().getSimpleName());
 			return true;
 		}
 
@@ -78,7 +134,12 @@ public class OutboxDispatcher
 		return true;
 	}
 
-	// Waits longer between retries after repeated failures, up to the five-minute limit.
+	/**
+	 * Calculates a retry delay that grows after repeated failures and stops at five minutes.
+	 *
+	 * @param attemptCount number of publish attempts made for the event
+	 * @return delay, in seconds, before another attempt
+	 */
 	private long retryDelaySeconds(int attemptCount)
 	{
 		int exponent = Math.min(Math.max(attemptCount - 1, 0), 6);

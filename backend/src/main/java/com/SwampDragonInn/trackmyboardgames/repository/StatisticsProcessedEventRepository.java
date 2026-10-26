@@ -13,13 +13,27 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.SwampDragonInn.trackmyboardgames.domain.StatisticsProcessedEvent;
 
-// Remembers which events statistics has handled. The future receiver must save this receipt and its
-// statistics changes in the same transaction, so a failed update does not leave a false success receipt.
+/**
+ * Reads and writes event receipts in {@code statistics_processed_events}, not {@code outbox_events}.
+ *
+ * <p>A receipt means the statistics service has handled that event already. The service saves a new receipt and
+ * the updated statistics in one transaction: either both commit, or both roll back. This prevents a
+ * repeated RabbitMQ delivery from recalculating statistics for the same event.
+ */
 public interface StatisticsProcessedEventRepository extends Repository<StatisticsProcessedEvent, UUID>
 {
 
-	// Returns 1 for a new event or 0 for a repeat. PostgreSQL also protects against simultaneous deliveries.
-	// An existing transaction is required: if the statistics update fails, this receipt must roll back too.
+	/**
+	 * Tries to record an event receipt as part of the statistics service's existing transaction.
+	 *
+	 * <p>The event ID comes from the RabbitMQ message and matches the original outbox event ID.
+	 * This query does not read the outbox table. PostgreSQL's unique event ID prevents duplicate receipts,
+	 * even if two deliveries try to record the same event at the same time.
+	 *
+	 * @param eventId ID of the event being handled
+	 * @param processedAt time recorded for this processing attempt
+	 * @return 1 if a new receipt was inserted, or 0 if a receipt already exists and calculation should be skipped
+	 */
 	@Modifying
 	@Transactional(propagation = Propagation.MANDATORY)
 	@Query(value = """
@@ -29,7 +43,12 @@ public interface StatisticsProcessedEventRepository extends Repository<Statistic
 			""", nativeQuery = true)
 	int recordIfNew(@Param("eventId") UUID eventId, @Param("processedAt") Instant processedAt);
 
-	// Looks up a saved receipt without needing the original game, play, or outbox row.
+	/**
+	 * Looks up a saved processing receipt without reading the original game, play, or outbox row.
+	 *
+	 * @param eventId ID of the event whose receipt to find
+	 * @return the saved receipt, or empty if none exists
+	 */
 	@Transactional(readOnly = true)
 	Optional<StatisticsProcessedEvent> findById(UUID eventId);
 }
