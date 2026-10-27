@@ -39,6 +39,7 @@ function BoardGameForm({ initialGame, isSaving, onCancel, onSubmit }: BoardGameF
         setCover(await blobToDataUrl(image))
     }
 
+    // Handle form submission by calling the onSubmit propagated from the parent component, CollectionPage.tsx.
     async function handleSubmit(event: FormEvent<HTMLFormElement>)
     {
         event.preventDefault()
@@ -73,7 +74,7 @@ function BoardGameForm({ initialGame, isSaving, onCancel, onSubmit }: BoardGameF
                         onChange={event => setValues({ ...values, name: event.target.value })}
                         maxLength={200}
                         required
-                        autoFocus
+                        autoFocus={window.matchMedia('(hover: hover) and (pointer: fine)').matches}
                     />
                 </label>
                 <label className="grid gap-1.5 text-sm font-semibold sm:col-span-3">

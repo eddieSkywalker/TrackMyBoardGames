@@ -1,5 +1,21 @@
 # How a Request Moves Through the Backend Layers
 
+## High-Level View: The Usual Flow
+
+```text
+React sends an HTTP request
+          ↓
+Controller — Which API action was requested?
+          ↓
+Service — Is it allowed, and what needs to happen?
+          ↓
+Repository — Read or write the records.
+          ↓
+Database
+```
+
+## Detailed Request Example
+
 This document shows what happens when React asks for one board game (`GET /api/games/{gameId}`), and what job each kind of file does. The QR label code follows the same pattern.
 
 ```mermaid

@@ -1,4 +1,5 @@
 import { useAuth0 } from '@auth0/auth0-react'
+import { useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 
 type AuthMode = 'login' | 'register'
@@ -7,6 +8,7 @@ type AuthMode = 'login' | 'register'
 function LoginRegisterPage({ mode }: { mode: AuthMode }) {
   const { isAuthenticated, isLoading, loginWithRedirect, error } = useAuth0()
   const location = useLocation()
+  const [redirectError, setRedirectError] = useState<string | null>(null)
   const isRegister = mode === 'register'
   const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? '/collection'
 
@@ -14,7 +16,7 @@ function LoginRegisterPage({ mode }: { mode: AuthMode }) {
     return <main className="auth-loading" role="status">Checking your session...</main>
   }
 
-  if (isAuthenticated) {
+  if (isAuthenticated && !error) {
     return <Navigate to="/collection" replace />
   }
 
@@ -43,19 +45,31 @@ function LoginRegisterPage({ mode }: { mode: AuthMode }) {
               : 'Pick up where your last game night left off.'}
           </p>
 
-          {error && <p className="auth-error" role="alert">{error.message}</p>}
+          {(redirectError || error) && (
+            <p className="auth-error" role="alert">
+              {redirectError ?? error?.message}
+            </p>
+          )}
 
           <button
             className="auth-button"
             type="button"
-            onClick={() =>
-              loginWithRedirect({
-                appState: { returnTo },
-                ...(isRegister && { authorizationParams: { screen_hint: 'signup' } }),
-              })
-            }
+            onClick={async () => {
+              setRedirectError(null)
+              try {
+                await loginWithRedirect({
+                  appState: { returnTo },
+                  authorizationParams: {
+                    ...(isRegister && !error && !redirectError ? { screen_hint: 'signup' } : {}),
+                    ...(error || redirectError ? { prompt: 'login' } : {}),
+                  },
+                })
+              } catch (cause) {
+                setRedirectError(cause instanceof Error ? cause.message : 'Could not open sign in.')
+              }
+            }}
           >
-            {isRegister ? 'Continue to registration' : 'Continue to sign in'}
+            {error ? 'Return to sign in' : isRegister ? 'Continue to registration' : 'Continue to sign in'}
           </button>
 
           <p className="switch-mode">

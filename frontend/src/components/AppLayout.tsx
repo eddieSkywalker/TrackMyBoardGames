@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useTheme } from '../hooks/useTheme'
@@ -9,9 +9,40 @@ function AppLayout({ children }: { children: ReactNode })
     const { user, logout } = useAuth0()
     const [theme, setTheme] = useTheme()
     const navigate = useNavigate()
+    // Safari does not reliably focus tapped buttons, so mobile menus cannot depend on :focus-within.
+    const [mobileMenu, setMobileMenu] = useState<'create' | 'profile' | null>(null)
+    const mobileCreateRef = useRef<HTMLDivElement>(null)
+    const mobileProfileRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() =>
+    {
+        if (!mobileMenu) return
+        const menu = mobileMenu === 'create' ? mobileCreateRef.current : mobileProfileRef.current
+
+        function dismissOnOutsidePointer(event: PointerEvent)
+        {
+            if (event.target instanceof Node && !menu?.contains(event.target)) setMobileMenu(null)
+        }
+
+        function dismissOnEscape(event: KeyboardEvent)
+        {
+            if (event.key !== 'Escape') return
+            setMobileMenu(null)
+            menu?.querySelector('button')?.focus()
+        }
+
+        document.addEventListener('pointerdown', dismissOnOutsidePointer)
+        document.addEventListener('keydown', dismissOnEscape)
+        return () =>
+        {
+            document.removeEventListener('pointerdown', dismissOnOutsidePointer)
+            document.removeEventListener('keydown', dismissOnEscape)
+        }
+    }, [mobileMenu])
 
     function closeMenu()
     {
+        setMobileMenu(null)
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
     }
 
@@ -50,7 +81,11 @@ function AppLayout({ children }: { children: ReactNode })
             <>
                 <li className="menu-disabled"><span>Profile</span></li>
                 <li>
-                    <button type="button" onClick={() => logout({ logoutParams: { returnTo: `${window.location.origin}/` } })}>
+                    <button type="button" onClick={() =>
+                    {
+                        closeMenu()
+                        void logout({ logoutParams: { returnTo: `${window.location.origin}/` } })
+                    }}>
                         Sign out
                     </button>
                 </li>
@@ -111,23 +146,25 @@ function AppLayout({ children }: { children: ReactNode })
             </header>
             {children}
             {/* DaisyUI includes the phone's bottom safe area in the dock height. The main padding leaves room for it. */}
-            <nav className="dock dock-md z-20 border-base-300 bg-base-100 text-base-content sm:hidden print:hidden" aria-label="Mobile navigation">
+            <nav className="mobile-navigation dock dock-md z-20 border-base-300 bg-base-100 text-base-content sm:hidden print:hidden" aria-label="Mobile navigation">
                 <NavLink to="/collection" end>
                     <svg className="size-6 fill-none stroke-current" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-7h6v7" />
                     </svg>
                     <span className="dock-label">Collection</span>
                 </NavLink>
-                <div className="dropdown dropdown-top">
-                    <button className="flex size-full flex-col items-center justify-center gap-1" type="button" aria-label="Open mobile create menu">
+                <div className={`dropdown dropdown-top${mobileMenu === 'create' ? ' dropdown-open' : ''}`} ref={mobileCreateRef}>
+                    <button className="flex size-full flex-col items-center justify-center gap-1" type="button" aria-label="Open mobile create menu" aria-expanded={mobileMenu === 'create'} aria-controls="mobile-create-menu" onClick={() => setMobileMenu(current => current === 'create' ? null : 'create')}>
                         <svg className="size-6 fill-none stroke-current" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
                             <path d="M12 5v14M5 12h14" />
                         </svg>
                         <span className="dock-label">Add</span>
                     </button>
-                    <ul className="menu dropdown-content bottom-full left-1/2 mb-3 max-h-[60svh] w-56 max-w-[calc(100vw-2rem)] -translate-x-1/2 overflow-y-auto rounded-box border border-base-300 bg-base-100 p-2 shadow-lg" tabIndex={0}>
-                        {createMenuItems()}
-                    </ul>
+                    {mobileMenu === 'create' && (
+                        <ul id="mobile-create-menu" className="menu dropdown-content bottom-full left-1/2 mb-3 max-h-[60svh] w-56 max-w-[calc(100vw-2rem)] -translate-x-1/2 overflow-y-auto rounded-box border border-base-300 bg-base-100 p-2 shadow-lg">
+                            {createMenuItems()}
+                        </ul>
+                    )}
                 </div>
                 <button type="button" aria-label="Toggle dark mode" aria-pressed={theme === 'boardgame-dark'} onClick={() => setTheme(theme === 'boardgame-dark' ? 'boardgame-light' : 'boardgame-dark')}>
                     <svg className="size-6 fill-none stroke-current" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -135,16 +172,18 @@ function AppLayout({ children }: { children: ReactNode })
                     </svg>
                     <span className="dock-label">Theme</span>
                 </button>
-                <div className="dropdown dropdown-top dropdown-end">
-                    <button className="flex size-full flex-col items-center justify-center gap-1" type="button" aria-label="Open mobile profile menu">
+                <div className={`dropdown dropdown-top dropdown-end${mobileMenu === 'profile' ? ' dropdown-open' : ''}`} ref={mobileProfileRef}>
+                    <button className="flex size-full flex-col items-center justify-center gap-1" type="button" aria-label="Open mobile profile menu" aria-expanded={mobileMenu === 'profile'} aria-controls="mobile-profile-menu" onClick={() => setMobileMenu(current => current === 'profile' ? null : 'profile')}>
                         <span className="avatar avatar-placeholder">
                             <span className="w-7 rounded-full bg-primary text-primary-content"><span>{userInitial}</span></span>
                         </span>
                         <span className="dock-label">Profile</span>
                     </button>
-                    <ul className="menu dropdown-content bottom-full right-0 mb-3 w-52 max-w-[calc(100vw-2rem)] rounded-box border border-base-300 bg-base-100 p-2 shadow-lg" tabIndex={0}>
-                        {profileMenuItems()}
-                    </ul>
+                    {mobileMenu === 'profile' && (
+                        <ul id="mobile-profile-menu" className="menu dropdown-content bottom-full right-0 mb-3 w-52 max-w-[calc(100vw-2rem)] rounded-box border border-base-300 bg-base-100 p-2 shadow-lg">
+                            {profileMenuItems()}
+                        </ul>
+                    )}
                 </div>
             </nav>
         </main>

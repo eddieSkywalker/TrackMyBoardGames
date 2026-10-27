@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import BoardGameForm from '../components/BoardGameForm'
 import BoardGameCollection from '../components/BoardGameCollection'
+import CollectionStatistics from '../components/CollectionStatistics'
 import ShelfBackground from '../components/ShelfBackground'
 import { apiAudience, apiBaseUrl, responseError } from '../api/apiHelpers'
 import type { BoardGame, GameFormValues } from '../types/boardGame'
@@ -11,7 +12,7 @@ import type { BoardGame, GameFormValues } from '../types/boardGame'
 // Shows the signed-in user's games and lets them add games to their own collection.
 function CollectionPage()
 {
-    const { getAccessTokenSilently } = useAuth0()
+    const { getAccessTokenSilently, user } = useAuth0()
     const [games, setGames] = useState<BoardGame[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
@@ -85,12 +86,15 @@ function CollectionPage()
 
         try
         {
-            const accessToken = await getAccessTokenSilently({
-                authorizationParams: { audience: apiAudience, scope: 'write:games' },
-            })
+            // Determine the access token for the request based on the required scope.
+            const accessToken = await getAccessTokenSilently({authorizationParams: { audience: apiAudience, scope: 'write:games' }})
+            const requestUrl = editingGame
+                ? `${apiBaseUrl}/api/games/${editingGame.id}`
+                : `${apiBaseUrl}/api/games`
+
             // Send the game details and cover photo (null removes it); Spring determines the owner from the validated token.
             const response = await fetch(
-                editingGame ? `${apiBaseUrl}/api/games/${editingGame.id}` : `${apiBaseUrl}/api/games`,
+                requestUrl,
                 {
                     method: editingGame ? 'PUT' : 'POST',
                     headers: {
@@ -115,14 +119,18 @@ function CollectionPage()
                 throw new Error(await responseError(response))
             }
 
+            // Read the saved game returned by the backend and update the list without reloading the page.
             const savedGame = await response.json() as BoardGame
             setGames(currentGames =>
             {
+                // Remove the old version if this was an edit, add the saved version, then sort by name.
                 const updatedGames = currentGames.filter(game => game.id !== savedGame.id)
                 updatedGames.push(savedGame)
                 updatedGames.sort((left, right) => left.name.localeCompare(right.name))
                 return updatedGames
             })
+
+            // Close the form, clear the game being edited, and show the user that the save succeeded.
             setIsAddFormOpen(false)
             setEditingGame(null)
             setSuccessMessage(editingGame
@@ -225,10 +233,13 @@ function CollectionPage()
                 <div className="flex flex-col justify-between gap-6 border-b border-base-300 pb-7 sm:flex-row sm:items-end">
                     <div>
                         <p className="mb-3 text-xs font-bold tracking-[0.16em] text-secondary">YOUR COLLECTION</p>
-                        <h1 className="font-serif text-4xl leading-tight text-base-content sm:text-5xl">Game shelf</h1>
+                        <h1 className="font-serif text-4xl leading-tight text-base-content sm:text-5xl">Game Shelf</h1>
                     </div>
                 </div>
                 </ShelfBackground>
+
+                {/* Start with fresh statistics when the signed-in account changes. */}
+                <CollectionStatistics key={user?.sub ?? 'signed-in-user'} games={games} />
 
                 {errorMessage && (
                     <p className="alert alert-soft alert-error mt-5 text-sm in-data-[theme=boardgame-light]:border-[#e2b6a9] in-data-[theme=boardgame-light]:bg-[#f7e9e5] in-data-[theme=boardgame-light]:text-[#792c23]" role="alert">
@@ -254,7 +265,6 @@ function CollectionPage()
                 <div className="mt-8">
                     <div className="mb-3 flex items-baseline justify-between">
                         <h2 className="text-base font-bold text-base-content">Your games</h2>
-                        {!isLoading && <span className="text-xs text-base-content/70">{games.length} {games.length === 1 ? 'game' : 'games'}</span>}
                     </div>
 
                     {isLoading ? (
