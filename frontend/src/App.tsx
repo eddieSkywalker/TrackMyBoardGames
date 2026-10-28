@@ -3,6 +3,7 @@ import LoginRegisterPage from './pages/LoginRegisterPage'
 import CollectionPage from './pages/CollectionPage'
 import PlayHistoryPage from './pages/PlayHistoryPage'
 import ScanPage from './pages/ScanPage'
+import StatsSummaryPage from './pages/StatsSummaryPage'
 import HomeRoute from './routing/HomeRoute'
 import ProtectedRoute from './routing/ProtectedRoute'
 import './App.css'
@@ -22,6 +23,10 @@ function App()
             <Route
                 path="/collection/:gameId"
                 element={<ProtectedRoute><PlayHistoryPage /></ProtectedRoute>}
+            />
+            <Route
+                path="/stats"
+                element={<ProtectedRoute><StatsSummaryPage /></ProtectedRoute>}
             />
             <Route
                 path="/scan"

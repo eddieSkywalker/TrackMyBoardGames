@@ -116,6 +116,17 @@ function AppLayout({ children }: { children: ReactNode })
                             {createMenuItems()}
                         </ul>
                     </div>
+                    <NavLink
+                        to="/stats"
+                        onClick={closeMenu}
+                        className={({ isActive }) => `btn btn-ghost btn-sm text-primary${isActive ? ' btn-active' : ''}`}
+                    >
+                        <svg className="size-5 fill-none stroke-current" viewBox="0 0 24 24"
+                            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M12 3v9h9a9 9 0 1 1-9-9ZM15 3a9 9 0 0 1 6 6h-6Z" />
+                        </svg>
+                        Track
+                    </NavLink>
                     <label className="swap swap-rotate btn btn-ghost btn-sm btn-circle text-primary" title="Toggle dark mode">
                         <input
                             type="checkbox"
@@ -166,6 +177,13 @@ function AppLayout({ children }: { children: ReactNode })
                         </ul>
                     )}
                 </div>
+                <NavLink to="/stats" onClick={closeMenu}>
+                    <svg className="size-6 fill-none stroke-current" viewBox="0 0 24 24"
+                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 3v9h9a9 9 0 1 1-9-9ZM15 3a9 9 0 0 1 6 6h-6Z" />
+                    </svg>
+                    <span className="dock-label">Track</span>
+                </NavLink>
                 <button type="button" aria-label="Toggle dark mode" aria-pressed={theme === 'boardgame-dark'} onClick={() => setTheme(theme === 'boardgame-dark' ? 'boardgame-light' : 'boardgame-dark')}>
                     <svg className="size-6 fill-none stroke-current" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M21 12.8A9 9 0 0 1 11.2 3 9 9 0 1 0 21 12.8Z" />

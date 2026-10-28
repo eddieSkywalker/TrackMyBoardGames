@@ -2,6 +2,9 @@
 
 ## Charts and license notices
 
+The Track navigation item opens the signed-in `/stats` page. This is currently
+a page shell; collection charts will be added separately.
+
 Apache ECharts is installed as `echarts` and includes TypeScript types. It can be
 used directly from React; no separate React wrapper or types package is required.
 See the [ECharts handbook](https://echarts.apache.org/handbook/en/basics/import/)
