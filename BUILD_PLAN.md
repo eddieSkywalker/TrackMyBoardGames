@@ -24,7 +24,7 @@ Build a personal board-game library and play tracker. Each user manages a privat
 | **0.6** | UIEnhancementOne - mobile UI pass | Improve mobile navigation with a bottom dock and reorganized add/actions menu; simplify the mobile header; improve game-cover and play-history presentation; contain wide-table scrolling and prevent page-level horizontal overflow on narrow screens. Preserve desktop navigation and core collection workflows. |
 | **0.7** | Cloud connectivity and hosting configuration | Complete the hosting, connectivity, certificate automation, and verification criteria listed below. |
 | **0.8** | Experience and backend improvements | **UIEnhancementTwo:** Focus on improving the user interface and user experience (UI/UX), including mobile usability, enhancements, and bug fixes.<br><br>**BackendEnhancementOne:** Focus on improving general backend processes, including authentication and account handling. |
-| **0.9** | Library insights | Add useful visual summaries such as plays over time, most/least played games, and games not played recently. Support date filters. Keep metrics consistent with the play-history records. |
+| **0.9** | Library Insights and Paid plan options | **Insights:** Add useful visual summaries such as plays over time, most/least played games, and games not played recently. Support date filters. Keep metrics consistent with the play-history records.<br><br>**Paid Plan:** Add collection-based tiers with configurable game limits, multiple named collections, and upgrade/subscription access rules without payment processing yet. |
 | **1.0** | Stable initial release | Complete responsive and accessible core workflows; tests show useful validation and error states; verify authorization, migrations, and backup/restore procedures; document configuration and deployment. Tag the verified release `v1.0.0`. |
 
 **QR scope decision:** Start with QR codes rather than inventing a new barcode format as a baseline. R&D needed to determine best solution for scanning mechanism.
@@ -63,7 +63,7 @@ flowchart LR
     V05 --> V06["0.6 UIEnhancementOne"]
     V06 --> V07["0.7 Cloud connectivity and hosting"]
     V07 --> V08["0.8 Experience and backend improvements"]
-    V08 --> V09["0.9 Insights"]
+    V08 --> V09["0.9 Insights and Paid plan options"]
     V09 --> V10["1.0 Stable release"]
 ```
 
