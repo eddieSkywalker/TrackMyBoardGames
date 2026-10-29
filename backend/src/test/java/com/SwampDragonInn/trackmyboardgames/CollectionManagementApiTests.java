@@ -317,6 +317,36 @@ class CollectionManagementApiTests
 		assertThat(defaultCollection(subject)).isEqualTo(starting);
 	}
 
+	@Test
+	void collectionSettingsCannotGrantPaidAccess() throws Exception
+	{
+		String subject = newSubject();
+		UUID collectionId = defaultCollection(subject);
+
+		// Unknown fields may be rejected or ignored, but neither result may change access rights.
+		int responseStatus = this.mockMvc.perform(put("/api/collections/{id}", collectionId)
+					.with(token(subject, "write:games")).contentType(MediaType.APPLICATION_JSON)
+					.content("""
+							{"name":"Still Free","planTier":"BUSINESS","permanentTier":"PRO",
+							"subscriptionStatus":"ACTIVE","subscriptionEndsAt":"2099-01-01T00:00:00Z",
+							"totalPayments":999999,"subscriberMonths":100}
+							"""))
+				.andReturn().getResponse().getStatus();
+
+		assertThat(responseStatus).isIn(200, 400);
+		assertThat(this.jdbc.queryForObject("select plan_tier from game_collections where id = ?",
+				String.class, collectionId)).isEqualTo("FREE");
+		assertThat(this.jdbc.queryForMap("""
+				select permanent_tier, subscription_status, subscription_ends_at, total_payments, subscriber_months
+				from game_collections where id = ?
+				""", collectionId))
+				.containsEntry("permanent_tier", "FREE")
+				.containsEntry("subscription_status", "INACTIVE")
+				.containsEntry("subscription_ends_at", null)
+				.containsEntry("total_payments", 0L)
+				.containsEntry("subscriber_months", 0L);
+	}
+
 	private String newSubject()
 	{
 		String subject = "collection-api-" + UUID.randomUUID();

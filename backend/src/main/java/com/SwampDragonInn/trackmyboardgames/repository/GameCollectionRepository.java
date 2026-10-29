@@ -5,6 +5,10 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
 
 import com.SwampDragonInn.trackmyboardgames.domain.GameCollection;
 
@@ -28,4 +32,11 @@ public interface GameCollectionRepository extends JpaRepository<GameCollection, 
 	 * Treats someone else's collection as missing rather than exposing their details.
 	 */
 	Optional<GameCollection> findByIdAndOwner_Id(UUID id, UUID ownerId);
+
+	/**
+	 * Makes payments for the same collection take turns so totals and paid months cannot overwrite each other.
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select c from GameCollection c where c.id = :collectionId and c.owner.id = :ownerId")
+	Optional<GameCollection> findForPayment(@Param("collectionId") UUID collectionId, @Param("ownerId") UUID ownerId);
 }

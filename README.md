@@ -190,10 +190,159 @@ and create games in the saved default. Background requests without an ID still u
 the default. Statistics remain owner-wide and are labeled as all-collections
 statistics when multiple collections exist; collection-scoped statistics are a later step.
 
-Collection creation/deletion, tiers, entitlements, limits, and collection-scoped
-statistics are not enabled yet. Accounts with only one collection have no collection-switching controls.
+Collection creation/deletion and collection-scoped statistics are not enabled yet.
+Accounts with only one collection have no collection-switching controls.
 The existing owner-wide game-name/edition uniqueness rule and API responses remain
-unchanged until game endpoints support explicit collection selection.
+unchanged; allowing duplicate names across different collections is a later step.
+
+### Collection access foundation
+
+Migration V14 originally added separate entitlement records. V15 moves those fields
+onto `game_collections` and removes the separate table. Existing access rights,
+games, default preferences, and backgrounds are preserved. No payment amounts or
+paid-month counts are invented for earlier access grants.
+
+`CollectionAccessPolicy` provides shared access checks:
+
+- Free, Home, and Pro rights do not expire.
+- Business requires a `BUSINESS` plan, an `ACTIVE` subscription, and an end time
+  strictly later than the current time. Access ends at that exact timestamp.
+- Confirmed payments earn permanent Home or Pro when the collection's accumulated
+  qualifying payments meet that tier's current saved price. Business no longer grants
+  Pro automatically. An inactive or expired subscription falls back to the tier
+  actually earned, including Free when no paid tier has been earned.
+- Historical monthly payments cannot shorten access from newer paid periods.
+  Already-earned permanent access is not removed when prices increase.
+- Checking access only returns the effective tier/allowance; it does not modify
+  records or delete games.
+
+V17 stores game allowances in `collection_limit_versions`, starting with:
+
+| Tier | Initial game allowance |
+| --- | ---: |
+| Free | 20 |
+| Home | 100 |
+| Pro | 200 |
+| Business | 1,000 |
+
+The migration inserts these limits once; application startup and later deployments
+leave them alone. `app.collections.limits.*` and `COLLECTION_*_GAME_LIMIT`
+environment variables are no longer used.
+
+`CollectionLimitRepository` reads the latest limit list whose start date has arrived.
+`CollectionAccessPolicy` uses those saved limits when asked for a collection's
+allowance. This is an on-demand query, not a background poll. Missing limits raise
+an error rather than use defaults. Every tier's limit must be positive.
+
+Like pricing, saved limit lists cannot be edited, deleted, or truncated. An
+authorized administrator changes allowances by inserting a complete new list with
+a start date and a reason:
+
+```sql
+INSERT INTO collection_limit_versions
+    (effective_from, free_limit, home_limit, pro_limit, business_limit, change_reason)
+VALUES ('2027-01-01T00:00:00Z', 20, 100, 200, 1000, 'Approved January game limits');
+```
+
+In production, give the runtime database role only `SELECT` on
+`collection_limit_versions` and reserve `INSERT` for the authorized administrator,
+as with pricing. Deployment credentials and roles are configured separately.
+Limit changes affect subsequent allowance checks for existing collections too;
+they do not delete games or rewrite a collection's earned tier.
+
+This step adds storage and policy only. **Game-creation limits are not enforced yet.**
+There is no purchase, grant, cancellation, or additional-collection creation endpoint;
+clients cannot assign paid tiers through collection settings.
+Enforcement, payment-approved creation, and Business cancellation/expiry
+retention and deletion will be implemented separately. Retention must use the
+earned fallback tier's limit, not assume every Business collection keeps Pro.
+
+### Confirmed payments and paid subscriber months
+
+V15 adds `collection_payments`, recording each confirmed payment's stable billing
+reference, owner, collection, amount, currency, and paid time. Business payments also
+identify one paid monthly period and its access end time. The server-side
+`CollectionPaymentService` is a building block for a future verified billing
+integration; it does not accept browser payment claims or verify real charges.
+Payment calculations and access updates live in this service. `GameCollection`
+holds the saved state and exposes simple assignments, rather than deciding payment rules.
+
+- `game_collections.total_payments` stores lifetime confirmed payments in **USD cents**.
+  `3000` means $30; floating-point money is not used. Only USD is supported for now.
+- Credit belongs to that collection. Account total spending is summed from its
+  payment history, not used to unlock other collections.
+- `subscriber_months` increments immediately for each distinct paid Business monthly
+  period, regardless of whether the subscription is still active. It counts paid
+  periods, not elapsed calendar time or partial months.
+- One-time purchases add payment credit but do not add subscriber months.
+- Repeated delivery of an identical payment is ignored. Changed details under the
+  same payment reference, or a second payment for the same monthly period, are rejected.
+  Totals, receipt history, and tier changes are saved in one transaction.
+- Account payment history survives deletion of a collection; deleting the account
+  removes that account's payment records. No collection-deletion endpoint exists yet.
+
+### Saved collection prices
+
+V16 stores complete price lists in `collection_price_versions`. Prices are whole
+USD cents and are independent of game allowances. The migration inserts these
+initial prices once:
+
+| Price | Initial amount |
+| --- | ---: |
+| Home permanent threshold | $30 |
+| Pro permanent threshold | $50 |
+| Business monthly charge | $30 |
+
+Application startup and later deployments do not rewrite these values. The former
+`app.collections.prices.*` settings and `COLLECTION_*_PRICE_CENTS` environment
+variables are no longer used.
+
+`CollectionPriceRepository` reads the latest price list whose `effective_from`
+date has arrived, using the database clock. Future-dated prices wait until that
+date. Missing current prices cause an error; there is no configuration or
+hard-coded fallback.
+
+Each price list has a permanent ID, a start date, a creation date, and a required
+reason for the change. Database triggers reject edits, deletion, and truncation
+of saved price lists. To change prices, an authorized administrator inserts a new
+complete price list. There is no price-editing API.
+
+For production, use separate migration/admin and runtime database roles. Give the
+runtime role only `SELECT` on `collection_price_versions`; reserve `INSERT` for the
+authorized pricing administrator. This repository does not provision deployment
+roles or change existing database credentials. A runtime role that owns the table
+can still insert prices or disable its protections, so separate credentials are
+needed for that additional permission boundary.
+
+For example, an administrator can deliberately schedule a new price list with:
+
+```sql
+INSERT INTO collection_price_versions
+    (effective_from, home_cents, pro_cents, business_monthly_cents, change_reason)
+VALUES ('2027-01-01T00:00:00Z', 3000, 5000, 3000, 'Approved January prices');
+```
+
+New payments store `price_version_id`, linking the receipt to the exact price list
+used for its access calculation. Older receipts keep this field empty because
+their original price list is unknown. Repeated payments keep their original price
+version and do not recalculate access. Prices are selected when processing a new
+payment, not from its historical payment date. A future checkout must bind the
+agreed price version to its quote before charging; checkout is not implemented yet.
+
+For example, one $30 Business payment earns Home and one paid subscriber month.
+Two earn Pro and two paid months. A Pro upgrade after $30 of qualifying payments
+costs $20 at the default prices. Business's recurring monthly charge is not reduced
+by lifetime payments. Each price must be positive, but no tier's price is required
+to be higher or lower than another tier's price.
+Saved thresholds are applied when new confirmed payments are recorded; adding a
+price version alone does not rewrite existing access records. Already-earned
+permanent tiers remain earned after a price increase.
+
+Refunds, chargebacks, tax, multi-currency credit, and support tools are not implemented.
+Currently every recorded payment amount qualifies. Future refunds should use separate
+adjustment records and a defined credit/access policy rather than erase original
+receipts or overwrite lifetime spending. A support tool making direct database
+changes must update cached collection totals and access consistently in one transaction.
 
 ### EDA foundation - first slice
 
