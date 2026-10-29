@@ -3,6 +3,8 @@ package com.SwampDragonInn.trackmyboardgames.domain;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.hibernate.annotations.DynamicUpdate;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -14,8 +16,11 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
-// JPA model for a named collection of games owned by one user. For now each user has a single default
-// collection; keeping it as its own table leaves room for several collections per user later.
+/**
+ * Stores one user's named collection and background.
+ * Only changed fields are saved, so renaming does not overwrite a background saved by another request.
+ */
+@DynamicUpdate
 @Entity
 @Table(name = "game_collections")
 public class GameCollection
@@ -48,19 +53,35 @@ public class GameCollection
 	{
 	}
 
+	/**
+	 * Creates a named collection belonging to the supplied owner.
+	 */
 	public GameCollection(AppUser owner, String name)
 	{
 		this.owner = owner;
 		this.name = name;
 	}
 
-	// Save a new background picture, replacing any existing one.
+	/**
+	 * Changes the name while leaving the collection's games and background untouched.
+	 */
+	public void rename(String name)
+	{
+		this.name = name;
+	}
+
+	/**
+	 * Saves a background picture, replacing any existing one.
+	 */
 	public void setBackground(String contentType, byte[] image)
 	{
 		this.backgroundContentType = contentType;
 		this.backgroundImage = image;
 	}
 
+	/**
+	 * Removes the background picture and its image type together.
+	 */
 	public void removeBackground()
 	{
 		this.backgroundContentType = null;

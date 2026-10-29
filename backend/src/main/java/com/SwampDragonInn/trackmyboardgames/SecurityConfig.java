@@ -14,12 +14,16 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-// Defines which requests are public and which require Auth0 authentication and API permissions.
+/**
+ * Defines which requests are public and which require Auth0 authentication and API permissions.
+ */
 @Configuration
 public class SecurityConfig
 {
 
-	// Allow the health check, then require the matching token permission for each protected API route.
+	/**
+	 * Allows the health check and requires the matching token permission for each protected API route.
+	 */
 	@Bean
 	SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception
 	{
@@ -31,6 +35,8 @@ public class SecurityConfig
 						.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 						.requestMatchers("/api/health").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/me").hasAuthority("SCOPE_read:profile")
+						.requestMatchers(HttpMethod.GET, "/api/collections", "/api/collections/**").hasAuthority("SCOPE_read:games")
+						.requestMatchers(HttpMethod.PUT, "/api/collections/**").hasAuthority("SCOPE_write:games")
 						.requestMatchers(HttpMethod.GET, "/api/games", "/api/games/**", "/api/collection/**", "/api/labels", "/api/scan/**", "/api/statistics").hasAuthority("SCOPE_read:games")
 						.requestMatchers(HttpMethod.POST, "/api/games", "/api/games/**").hasAuthority("SCOPE_write:games")
 						.requestMatchers(HttpMethod.PUT, "/api/games/**", "/api/collection/**").hasAuthority("SCOPE_write:games")
@@ -41,7 +47,9 @@ public class SecurityConfig
 				.build();
 	}
 
-	// Each environment supplies the exact frontend origins allowed to call this API.
+	/**
+	 * Allows browser requests only from the frontend origins configured for this environment.
+	 */
 	@Bean
 	CorsConfigurationSource corsConfigurationSource(
 			@Value("${app.cors.allowed-origins}") List<String> allowedOrigins)

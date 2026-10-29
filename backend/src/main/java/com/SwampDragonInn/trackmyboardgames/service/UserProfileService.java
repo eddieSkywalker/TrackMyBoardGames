@@ -10,7 +10,9 @@ import com.SwampDragonInn.trackmyboardgames.repository.GameCollectionRepository;
 import com.SwampDragonInn.trackmyboardgames.domain.GameCollection;
 import jakarta.persistence.EntityManager;
 
-// Converts a validated Auth0 identity into its matching local profile, creating one on first use.
+/**
+ * Matches a validated Auth0 login to a local profile and ensures it has a starting collection.
+ */
 @Service
 public class UserProfileService
 {
@@ -19,6 +21,9 @@ public class UserProfileService
 	private final GameCollectionRepository collections;
 	private final EntityManager entityManager;
 
+	/**
+	 * Supplies profile and collection access, plus the helper used to reload a profile after waiting for setup.
+	 */
 	public UserProfileService(AppUserRepository appUserRepository, GameCollectionRepository collections, EntityManager entityManager)
 	{
 		this.appUserRepository = appUserRepository;
@@ -26,7 +31,9 @@ public class UserProfileService
 		this.entityManager = entityManager;
 	}
 
-	// Find or create the local profile using the issuer and subject from a validated Auth0 token.
+	/**
+	 * Reads the login provider and user identity from a validated token, then delegates to profile setup.
+	 */
 	@Transactional
 	public AppUser findOrCreate(Jwt jwt)
 	{

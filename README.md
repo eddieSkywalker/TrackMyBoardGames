@@ -146,8 +146,27 @@ New profile setup creates the starting collection and saves its default preferen
 atomically, including concurrent first requests. New games use that collection;
 the shelf background service uses the same default collection.
 
-This is a storage foundation only: collection management/selection, tiers,
-entitlements, limits, and collection-scoped statistics are not enabled yet.
+The backend supports managing existing collections through these endpoints:
+
+| Method | Endpoint | Purpose | Required scope |
+| --- | --- | --- | --- |
+| GET | `/api/collections` | List owned collections, oldest first (ID breaks ties) | `read:games` |
+| PUT | `/api/collections/{collectionId}` | Rename an owned collection with `{"name":"Family games"}` | `write:games` |
+| PUT | `/api/collections/{collectionId}/default` | Save an owned collection as the default; no request body | `write:games` |
+
+List responses contain objects with `id`, `name`, and `defaultCollection` (a boolean).
+Both PUT endpoints return the updated collection in that same shape.
+Names must be nonblank and at most 200 characters; surrounding spaces are removed.
+Missing collections and another user's collections both return 404. Invalid names
+or malformed collection IDs return 400.
+
+Changing the default does not move existing games. New games and the legacy
+`/api/collection` background endpoint use the saved default; game lists and
+statistics still include all of the owner's games. Merely listing collections
+does not change the default of an initialized profile.
+
+Collection creation/deletion, frontend selection, tiers, entitlements, limits,
+and collection-scoped statistics are not enabled yet.
 The existing owner-wide game-name/edition uniqueness rule and API responses remain
 unchanged until game endpoints support explicit collection selection.
 
