@@ -10,8 +10,9 @@ import CollectionNavigation from '../components/CollectionNavigation'
 import { fetchCollections, saveDefaultCollection, type GameCollectionSummary } from '../api/collectionApi'
 import { apiAudience, apiBaseUrl, responseError } from '../api/apiHelpers'
 import type { BoardGame, GameFormValues } from '../types/boardGame'
+import { useCurrentCollection } from '../hooks/useCurrentCollection'
 
-/** Account changes start a fresh browsing session at that account's saved default. */
+/** Account changes start a fresh browsing session without keeping the previous account's forms or data. */
 function CollectionPage()
 {
     const { user } = useAuth0()
@@ -30,7 +31,7 @@ function CollectionBrowser()
 {
     const { getAccessTokenSilently } = useAuth0()
     const [collections, setCollections] = useState<GameCollectionSummary[]>([])
-    const [selectedId, setSelectedId] = useState<string | null>(null)
+    const { currentCollectionId: selectedId, setCurrentCollectionId: setSelectedId } = useCurrentCollection()
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [savingDefault, setSavingDefault] = useState(false)
     const [retryCount, setRetryCount] = useState(0)
@@ -59,7 +60,9 @@ function CollectionBrowser()
                 if (isCurrentRequest)
                 {
                     setCollections(loadedCollections)
-                    setSelectedId(loadedCollections[0].id)
+                    // Keep the shelf viewed before visiting Track; use the default for a fresh session or removed shelf.
+                    setSelectedId(currentId => loadedCollections.some(collection => collection.id === currentId)
+                        ? currentId : loadedCollections[0].id)
                 }
             }
             catch (error)
@@ -78,7 +81,7 @@ function CollectionBrowser()
             isCurrentRequest = false
             abortController.abort()
         }
-    }, [getAccessTokenSilently, retryCount])
+    }, [getAccessTokenSilently, retryCount, setSelectedId])
 
     /** Saves the viewed collection as the default without moving it or changing the browsing order. */
     async function makeDefault()

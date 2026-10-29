@@ -29,6 +29,7 @@ import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSummaryReposito
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsRefreshQueryRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.AppUserRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.CollectionStatisticsRepository;
+import com.SwampDragonInn.trackmyboardgames.repository.StatisticsHeatmapRepository;
 import com.SwampDragonInn.trackmyboardgames.service.StatisticsRefreshService;
 import com.SwampDragonInn.trackmyboardgames.service.UserProfileService;
 
@@ -53,6 +54,9 @@ class StatisticsRefreshTests
 
 	@Autowired
 	private CollectionStatisticsRepository collectionSummaries;
+
+	@Autowired
+	private StatisticsHeatmapRepository heatmaps;
 
 	@Autowired
 	private StatisticsRefreshQueryRepository refreshQueries;
@@ -213,7 +217,8 @@ class StatisticsRefreshTests
 	void failureAfterSavingRollsBackBothSummaryAndReceipt()
 	{
 		UUID eventId = event();
-		game(this.ownerId, "Azul", "");
+		UUID gameId = game(this.ownerId, "Azul", "");
+		play(gameId, "2026-10-21");
 		UUID collectionId = transaction().execute(status ->
 				this.entityManager.find(AppUser.class, this.ownerId).getDefaultCollection().getId());
 
@@ -224,6 +229,8 @@ class StatisticsRefreshTests
 			assertThat(this.collectionSummaries.findByCollectionAndOwner(collectionId, this.ownerId)
 					.orElseThrow().getCollectionSize()).isEqualTo(1);
 			assertThat(this.receipts.findById(eventId)).isPresent();
+			assertThat(this.heatmaps.findSaved(this.ownerId, null).orElseThrow().dailyPlays()).containsEntry("2026-10-21", 1L);
+			assertThat(this.heatmaps.findSaved(this.ownerId, collectionId).orElseThrow().dailyPlays()).containsEntry("2026-10-21", 1L);
 			throw new IllegalStateException("Simulated failure after saving statistics");
 		}))
 				.isInstanceOf(IllegalStateException.class)
@@ -231,6 +238,8 @@ class StatisticsRefreshTests
 		assertThat(this.summaries.findById(this.ownerId)).isEmpty();
 		assertThat(this.collectionSummaries.findByCollectionAndOwner(collectionId, this.ownerId)).isEmpty();
 		assertThat(this.receipts.findById(eventId)).isEmpty();
+		assertThat(this.heatmaps.findSaved(this.ownerId, null)).isEmpty();
+		assertThat(this.heatmaps.findSaved(this.ownerId, collectionId)).isEmpty();
 		assertThat(this.service.refresh(eventId, this.ownerId)).isTrue();
 		assertThat(this.collectionSummaries.findByCollectionAndOwner(collectionId, this.ownerId)
 				.orElseThrow().getCollectionSize()).isEqualTo(1);

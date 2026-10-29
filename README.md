@@ -165,8 +165,9 @@ does not change the default of an initialized profile.
 
 ### Viewing a collection
 
-The collection page opens at the saved default. Its outlined star saves the viewed
-collection as the new default; a filled star marks the existing default. One default
+The collection page opens at the saved default in a fresh session. Returning from
+another page keeps the last viewed shelf for that signed-in account. Its outlined
+star saves the viewed collection as the new default; a filled star marks the existing default. One default
 is always kept, so clicking a filled star does not clear it. Saving a different
 default does not reorder the current browsing session.
 

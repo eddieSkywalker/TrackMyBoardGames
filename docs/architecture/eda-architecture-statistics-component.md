@@ -16,6 +16,17 @@ collections. Statistics below the shelf follow the selected collection. Switchin
 shelves keeps the account display mounted and unchanged. Existing card labels remain
 the same.
 
+Since V19, both summary tables also hold saved daily play counts. The same refresh
+replaces these counts before committing the cards and event receipt. Track reads
+only the current UTC month's saved dates through `/api/statistics/heatmap`, with
+an optional owned `collectionId`. Reading the heatmap never recounts source plays.
+The current shelf is shared across frontend routes for the signed-in account;
+Track's All Collections filter is temporary and does not change the saved default.
+The month is rendered with ECharts' calendar heatmap: weekday rows, week columns,
+small blue intensity cells, a play-count legend, and date/count tooltips. A
+collapsible daily-count table provides the same data without relying on color or
+pointer interaction. The chart resizes with its container and follows theme changes.
+
 ## 1. The main building blocks
 
 ```mermaid

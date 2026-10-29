@@ -23,6 +23,33 @@ export type Statistics = {
     refreshedAt: string | null
 }
 
+export type MonthlyHeatmap = {
+    month: string
+    timezone: string
+    days: { date: string; playCount: number }[] | null
+    refreshedAt: string | null
+}
+
+/** Reads saved daily counts for the current month; omitting the collection means all collections. */
+export async function fetchMonthlyHeatmap(accessToken: string | undefined, signal: AbortSignal,
+    collectionId?: string): Promise<MonthlyHeatmap>
+{
+    const token = requireToken(accessToken)
+    const collectionQuery = collectionId ? `?collectionId=${encodeURIComponent(collectionId)}` : ''
+    const response = await fetch(`${apiBaseUrl}/api/statistics/heatmap${collectionQuery}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal,
+        cache: 'no-store',
+    })
+
+    if (!response.ok)
+    {
+        throw new Error(await responseError(response))
+    }
+
+    return await response.json() as MonthlyHeatmap
+}
+
 // Ask for the signed-in user's saved statistics, without recalculating their collection.
 // accessToken is the sign-in token sent to the backend. If it is undefined (missing),
 // requireToken stops the request with a sign-in error rather than sending it without a token.

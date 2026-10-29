@@ -28,6 +28,22 @@ public class StatisticsController
 		this.statistics = statistics;
 	}
 
+	/**
+	 * Reads the current month's saved daily counts for all collections or one chosen shelf.
+	 */
+	@GetMapping("/heatmap")
+	public ResponseEntity<MonthlyHeatmapResponse> heatmap(@AuthenticationPrincipal Jwt jwt,
+			@RequestParam(required = false) UUID collectionId)
+	{
+		String issuer = jwt.getIssuer().toString();
+		String subject = jwt.getSubject();
+		MonthlyHeatmapResponse savedHeatmap = this.statistics.readMonthlyHeatmap(issuer, subject, collectionId);
+
+		return ResponseEntity.ok()
+				.cacheControl(CacheControl.noStore())
+				.body(savedHeatmap);
+	}
+
 	// Handles the collection page's request for saved statistics.
 	@GetMapping
 	public ResponseEntity<CollectionStatisticsResponse> get(@AuthenticationPrincipal Jwt jwt,

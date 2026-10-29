@@ -37,7 +37,7 @@ public class SecurityConfig
 						.requestMatchers(HttpMethod.GET, "/api/me").hasAuthority("SCOPE_read:profile")
 						.requestMatchers(HttpMethod.GET, "/api/collections", "/api/collections/**").hasAuthority("SCOPE_read:games")
 						.requestMatchers(HttpMethod.PUT, "/api/collections/**").hasAuthority("SCOPE_write:games")
-						.requestMatchers(HttpMethod.GET, "/api/games", "/api/games/**", "/api/collection/**", "/api/labels", "/api/scan/**", "/api/statistics").hasAuthority("SCOPE_read:games")
+						.requestMatchers(HttpMethod.GET, "/api/games", "/api/games/**", "/api/collection/**", "/api/labels", "/api/scan/**", "/api/statistics", "/api/statistics/heatmap").hasAuthority("SCOPE_read:games")
 						.requestMatchers(HttpMethod.POST, "/api/games", "/api/games/**").hasAuthority("SCOPE_write:games")
 						.requestMatchers(HttpMethod.PUT, "/api/games/**", "/api/collection/**").hasAuthority("SCOPE_write:games")
 						.requestMatchers(HttpMethod.DELETE, "/api/games/**", "/api/collection/**").hasAuthority("SCOPE_write:games")

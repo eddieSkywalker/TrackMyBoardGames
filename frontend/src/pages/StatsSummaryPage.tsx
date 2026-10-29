@@ -1,17 +1,14 @@
-import AppLayout from '../components/AppLayout'
+import { useCurrentCollection } from '../hooks/useCurrentCollection'
+import TrackView from '../components/track/TrackView'
 
+/** Starts Track at the viewed shelf while keeping its temporary All Collections choice separate. */
 function StatsSummaryPage()
 {
-    return (
-        <AppLayout>
-            <section className="mx-auto mt-6 max-w-6xl" aria-labelledby="stats-summary-title">
-                <h1 id="stats-summary-title" className="text-2xl font-bold">Collection insights</h1>
-                <p className="mt-2 text-base-content/70">
-                    Charts and visual summaries of your collection will appear here.
-                </p>
-            </section>
-        </AppLayout>
-    )
+    // Start with the shelf the user was viewing on the Collection page.
+    const { currentCollectionId } = useCurrentCollection()
+
+    // Returning from another shelf starts a fresh Track view; account changes reset the shared provider too.
+    return <TrackView key={currentCollectionId ?? 'default'} initialCollectionId={currentCollectionId} />
 }
 
 export default StatsSummaryPage
