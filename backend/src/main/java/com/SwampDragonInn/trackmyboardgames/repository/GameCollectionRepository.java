@@ -12,5 +12,5 @@ public interface GameCollectionRepository extends JpaRepository<GameCollection, 
 {
 
 	// With only one collection per user today, this returns that one (the oldest if there are ever several).
-	Optional<GameCollection> findFirstByOwner_IdOrderByCreatedAtAsc(UUID ownerId);
+	Optional<GameCollection> findFirstByOwner_IdOrderByCreatedAtAscIdAsc(UUID ownerId);
 }

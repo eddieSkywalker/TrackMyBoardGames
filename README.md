@@ -132,6 +132,25 @@ npm run build
 
 Flyway runs migrations from `backend/src/main/resources/db/migration` at backend startup. Add schema changes as new versioned SQL files, for example `V9__create_outbox_events.sql`; do not edit migrations after they have been applied. Hibernate is configured to validate mappings, not to create or update the schema.
 
+### Collection foundation
+
+Migration V13 reuses the existing `game_collections` table. Each existing account
+gets a starting collection if it has none; otherwise its oldest collection is
+selected (with an ID tie-breaker). Existing collection names and shelf backgrounds
+are preserved. `app_users.default_collection_id` records this starting preference,
+and `board_games.collection_id` attaches every existing game without replacing its
+ID, plays, cover, or QR labels. Composite foreign keys reject cross-owner game and
+default-collection links.
+
+New profile setup creates the starting collection and saves its default preference
+atomically, including concurrent first requests. New games use that collection;
+the shelf background service uses the same default collection.
+
+This is a storage foundation only: collection management/selection, tiers,
+entitlements, limits, and collection-scoped statistics are not enabled yet.
+The existing owner-wide game-name/edition uniqueness rule and API responses remain
+unchanged until game endpoints support explicit collection selection.
+
 ### EDA foundation - first slice
 
 Migration V9 adds `outbox_events`, a shared holding table for multiple event types. Each row records an event's type/version, owner and source identifiers, JSON object payload, occurrence time, and publication/retry/claim metadata. Source identifiers are intentionally not cascading foreign keys so deletion events can outlive deleted records.

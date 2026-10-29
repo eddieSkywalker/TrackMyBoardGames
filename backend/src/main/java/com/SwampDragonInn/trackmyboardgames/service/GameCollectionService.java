@@ -7,7 +7,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.SwampDragonInn.trackmyboardgames.domain.AppUser;
 import com.SwampDragonInn.trackmyboardgames.domain.GameCollection;
-import com.SwampDragonInn.trackmyboardgames.repository.GameCollectionRepository;
 
 // Looks after the signed-in user's collection and its shelf background picture. Everything is found through
 // the signed-in user, so there is no way to ask for someone else's collection.
@@ -15,14 +14,11 @@ import com.SwampDragonInn.trackmyboardgames.repository.GameCollectionRepository;
 public class GameCollectionService
 {
 
-	private final GameCollectionRepository gameCollectionRepository;
 	private final UserProfileService userProfileService;
 	private final ImageUploadChecker imageUploadChecker;
 
-	public GameCollectionService(GameCollectionRepository gameCollectionRepository,
-			UserProfileService userProfileService, ImageUploadChecker imageUploadChecker)
+	public GameCollectionService(UserProfileService userProfileService, ImageUploadChecker imageUploadChecker)
 	{
-		this.gameCollectionRepository = gameCollectionRepository;
 		this.userProfileService = userProfileService;
 		this.imageUploadChecker = imageUploadChecker;
 	}
@@ -57,13 +53,11 @@ public class GameCollectionService
 		return "data:" + image.contentType() + ";base64," + Base64.getEncoder().encodeToString(image.data());
 	}
 
-	// Find the user's collection, creating the default one the first time it is needed.
+	// Profile initialization ensures the owner has a saved starting/default collection.
 	private GameCollection findOrCreateCollection(String subjectIssuer, String subject)
 	{
 		AppUser owner = this.userProfileService.findOrCreate(subjectIssuer, subject);
 
-		return this.gameCollectionRepository.findFirstByOwner_IdOrderByCreatedAtAsc(owner.getId())
-				.orElseGet(() -> this.gameCollectionRepository
-						.save(new GameCollection(owner, GameCollection.DEFAULT_NAME)));
+		return owner.getDefaultCollection();
 	}
 }

@@ -29,6 +29,7 @@ import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSummaryReposito
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsRefreshQueryRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.AppUserRepository;
 import com.SwampDragonInn.trackmyboardgames.service.StatisticsRefreshService;
+import com.SwampDragonInn.trackmyboardgames.service.UserProfileService;
 
 import jakarta.persistence.EntityManager;
 
@@ -39,6 +40,9 @@ class StatisticsRefreshTests
 
 	@Autowired
 	private StatisticsRefreshService service;
+
+	@Autowired
+	private UserProfileService profiles;
 
 	@Autowired
 	private AppUserRepository users;
@@ -347,8 +351,7 @@ class StatisticsRefreshTests
 	{
 		UUID id = transaction().execute(status ->
 		{
-			AppUser owner = new AppUser("https://example.test/", "statistics-" + UUID.randomUUID());
-			this.entityManager.persist(owner);
+			AppUser owner = this.profiles.findOrCreate("https://example.test/", "statistics-" + UUID.randomUUID());
 			return owner.getId();
 		});
 		this.owners.add(id);

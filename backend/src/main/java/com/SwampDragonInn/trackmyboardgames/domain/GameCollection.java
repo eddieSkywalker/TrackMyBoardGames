@@ -78,6 +78,11 @@ public class GameCollection
 		return this.id;
 	}
 
+	public AppUser getOwner()
+	{
+		return this.owner;
+	}
+
 	public String getName()
 	{
 		return this.name;

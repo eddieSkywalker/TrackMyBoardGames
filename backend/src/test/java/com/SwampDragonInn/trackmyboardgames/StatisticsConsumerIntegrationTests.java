@@ -25,6 +25,7 @@ import com.SwampDragonInn.trackmyboardgames.messaging.StatisticsMessageConsumer;
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsProcessedEventRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSummaryRepository;
 import com.SwampDragonInn.trackmyboardgames.service.StatisticsRefreshService;
+import com.SwampDragonInn.trackmyboardgames.service.UserProfileService;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -41,6 +42,9 @@ class StatisticsConsumerIntegrationTests
 
 	@Autowired
 	private StatisticsRefreshService statistics;
+
+	@Autowired
+	private UserProfileService profiles;
 
 	@Autowired
 	private StatisticsProcessedEventRepository receipts;
@@ -66,8 +70,7 @@ class StatisticsConsumerIntegrationTests
 	{
 		new TransactionTemplate(this.transactionManager).executeWithoutResult(status ->
 		{
-			AppUser owner = new AppUser("https://example.test/", "receiver-" + UUID.randomUUID());
-			this.entityManager.persist(owner);
+			AppUser owner = this.profiles.findOrCreate("https://example.test/", "receiver-" + UUID.randomUUID());
 			this.ownerId = owner.getId();
 			BoardGame game = new BoardGame(owner, "Azul", "", null, null, null, null, null);
 			this.entityManager.persist(game);
