@@ -14,12 +14,14 @@ type Props = {
 function CollectionNavigation({ collections, selected, disabled, savingDefault, onSelect, onMakeDefault }: Props)
 {
     const [menuOpen, setMenuOpen] = useState(false)
+    // Give the menu its own accessible ID and remember its button so keyboard focus can return there.
     const menuId = useId()
     const menuButton = useRef<HTMLButtonElement>(null)
     const index = collections.findIndex(collection => collection.id === selected.id)
 
     return (
         <div className="flex items-start gap-2">
+            {/* An outlined star saves this collection as the default. A filled star cannot clear the existing default. */}
             <button
                 type="button"
                 className="btn btn-square btn-sm border-base-300 bg-base-100"
@@ -36,13 +38,16 @@ function CollectionNavigation({ collections, selected, disabled, savingDefault, 
                     </svg>
                 )}
             </button>
+            {/* A single collection needs the default marker, but no collection-switching controls. */}
             {collections.length > 1 && (
                 <>
+                    {/* Desktop only: close when focus leaves the menu, but not when moving between its controls. */}
                     <div className="relative hidden sm:block" onBlur={event =>
                     {
                         if (!event.currentTarget.contains(event.relatedTarget)) setMenuOpen(false)
                     }} onKeyDown={event =>
                     {
+                        // Escape dismisses the dropdown and returns focus to the button that opened it.
                         if (event.key === 'Escape')
                         {
                             setMenuOpen(false)
@@ -62,6 +67,7 @@ function CollectionNavigation({ collections, selected, disabled, savingDefault, 
                                 <select id={`${menuId}-select`} className="select select-bordered w-full"
                                     value={selected.id} disabled={disabled || savingDefault} onChange={event =>
                                     {
+                                        // Viewing another collection does not save it as the default.
                                         onSelect(event.target.value)
                                         setMenuOpen(false)
                                         menuButton.current?.focus()
@@ -75,6 +81,7 @@ function CollectionNavigation({ collections, selected, disabled, savingDefault, 
                             </div>
                         )}
                     </div>
+                    {/* Mobile only: buttons offer an alternative to swiping and stop at either end without looping. */}
                     <div className="flex gap-1 sm:hidden">
                         <button className="btn btn-square btn-sm bg-base-100" type="button" aria-label="Previous collection"
                             disabled={disabled || savingDefault || index === 0} onClick={() => onSelect(collections[index - 1].id)}>

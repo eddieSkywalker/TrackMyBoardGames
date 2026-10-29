@@ -15,7 +15,14 @@ import type { BoardGame, GameFormValues } from '../types/boardGame'
 function CollectionPage()
 {
     const { user } = useAuth0()
-    return <CollectionBrowser key={`${user?.iss ?? ''}:${user?.sub ?? ''}`} />
+    const loginProvider = user?.iss ?? ''
+    const userId = user?.sub ?? ''
+    const accountKey = `${loginProvider}:${userId}`
+
+    // A different account key makes React discard the previous account's browsing state.
+    return (
+        <CollectionBrowser key={accountKey} />
+    )
 }
 
 /** Keeps temporary viewing separate from the saved default; starring does not reorder the current session. */
@@ -26,53 +33,75 @@ function CollectionBrowser()
     const [selectedId, setSelectedId] = useState<string | null>(null)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [savingDefault, setSavingDefault] = useState(false)
-    const [retry, setRetry] = useState(0)
+    const [retryCount, setRetryCount] = useState(0)
 
+    // Load the collection list once per account or retry; the API helper puts the saved default first.
     useEffect(() =>
     {
-        let current = true
-        const controller = new AbortController()
-        async function load()
+        let isCurrentRequest = true
+        const abortController = new AbortController()
+
+        async function loadCollections()
         {
             try
             {
-                const token = await getAccessTokenSilently({
+                const accessToken = await getAccessTokenSilently({
                     authorizationParams: { audience: apiAudience, scope: 'read:games' },
                 })
-                if (!current) return
-                const results = await fetchCollections(token, controller.signal)
-                if (current)
+                // The user may leave while Auth0 is preparing the token.
+                if (!isCurrentRequest)
                 {
-                    setCollections(results)
-                    setSelectedId(results[0].id)
+                    return
+                }
+
+                const loadedCollections = await fetchCollections(accessToken, abortController.signal)
+
+                if (isCurrentRequest)
+                {
+                    setCollections(loadedCollections)
+                    setSelectedId(loadedCollections[0].id)
                 }
             }
             catch (error)
             {
-                if (current) setErrorMessage(error instanceof Error ? error.message : 'Could not load your collections.')
+                if (isCurrentRequest)
+                {
+                    setErrorMessage(error instanceof Error ? error.message : 'Could not load your collections.')
+                }
             }
         }
-        void load()
+        void loadCollections()
+
         return () =>
         {
-            current = false
-            controller.abort()
+            // Cancel the old load and prevent its result from replacing a newer browsing session.
+            isCurrentRequest = false
+            abortController.abort()
         }
-    }, [getAccessTokenSilently, retry])
+    }, [getAccessTokenSilently, retryCount])
 
+    /** Saves the viewed collection as the default without moving it or changing the browsing order. */
     async function makeDefault()
     {
-        if (!selectedId || savingDefault) return
+        if (!selectedId || savingDefault)
+        {
+            return
+        }
+
         setSavingDefault(true)
         setErrorMessage(null)
+
         try
         {
-            const token = await getAccessTokenSilently({
+            const accessToken = await getAccessTokenSilently({
                 authorizationParams: { audience: apiAudience, scope: 'write:games' },
             })
-            const saved = await saveDefaultCollection(token, selectedId)
-            setCollections(current => current.map(collection => ({
-                ...collection, defaultCollection: collection.id === saved.id,
+            const savedDefault = await saveDefaultCollection(accessToken, selectedId)
+
+            // Update stars only after the server confirms the save; leave the list order unchanged.
+            setCollections(currentCollections => currentCollections.map(collection => ({
+                ...collection,
+                defaultCollection: collection.id === savedDefault.id,
             })))
         }
         catch (error)
@@ -85,8 +114,22 @@ function CollectionBrowser()
         }
     }
 
-    const selected = collections.find(collection => collection.id === selectedId)
-    if (!selected)
+    function retryLoadingCollections()
+    {
+        setErrorMessage(null)
+        setRetryCount(currentCount => currentCount + 1)
+    }
+
+    function selectCollection(collectionId: string)
+    {
+        setSelectedId(collectionId)
+        setErrorMessage(null)
+    }
+
+    const selectedCollection = collections.find(collection => collection.id === selectedId)
+
+    // Do not display a shelf until its collection is known; offer a retry if loading failed.
+    if (!selectedCollection)
     {
         return (
             <AppLayout>
@@ -94,20 +137,27 @@ function CollectionBrowser()
                     {errorMessage ? (
                         <div className="alert alert-error" role="alert">
                             <span>{errorMessage}</span>
-                            <button type="button" className="btn btn-sm" onClick={() =>
-                            {
-                                setErrorMessage(null)
-                                setRetry(value => value + 1)
-                            }}>Retry</button>
+                            <button type="button" className="btn btn-sm" onClick={retryLoadingCollections}>
+                                Retry
+                            </button>
                         </div>
                     ) : <p role="status">Loading your collections...</p>}
                 </section>
             </AppLayout>
         )
     }
-    return <CollectionView key={selected.id} collections={collections} selected={selected}
-        savingDefault={savingDefault} defaultError={errorMessage} onMakeDefault={makeDefault}
-        onSelect={id => { setSelectedId(id); setErrorMessage(null) }} />
+    // A different collection key clears the previous shelf's games, forms, and pending loads.
+    return (
+        <CollectionView
+            key={selectedCollection.id}
+            collections={collections}
+            selected={selectedCollection}
+            savingDefault={savingDefault}
+            defaultError={errorMessage}
+            onMakeDefault={makeDefault}
+            onSelect={selectCollection}
+        />
+    )
 }
 
 type CollectionViewProps = {

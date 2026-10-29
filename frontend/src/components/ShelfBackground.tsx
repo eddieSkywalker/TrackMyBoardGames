@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type TouchEvent } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth0 } from '@auth0/auth0-react'
 import { apiAudience, apiBaseUrl, responseError } from '../api/apiHelpers'
@@ -25,7 +25,7 @@ function ShelfBackground({ children, collectionId, navigation, onSwipe, navigati
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [isPickerOpen, setIsPickerOpen] = useState(false)
     const location = useLocation()
-    const touchStart = useRef<{ x: number; y: number } | null>(null)
+    const swipeStartPosition = useRef<{ horizontal: number; vertical: number } | null>(null)
     const collectionUrl = `${apiBaseUrl}/api/collection?collectionId=${encodeURIComponent(collectionId)}`
 
     // useEffect runs after the component first appears, and again if the token function changes.
@@ -56,7 +56,10 @@ function ShelfBackground({ children, collectionId, navigation, onSwipe, navigati
 
                 // Put the saved image into component state so React displays it.
                 const collection = await response.json() as { backgroundImage: string | null }
-                if (isCurrent) setBackgroundImage(collection.backgroundImage)
+                if (isCurrent)
+                {
+                    setBackgroundImage(collection.backgroundImage)
+                }
             }
             catch (error)
             {
@@ -181,38 +184,85 @@ function ShelfBackground({ children, collectionId, navigation, onSwipe, navigati
     useEffect(() =>
     {
         // Starting on a later tick keeps React from treating the busy-state update as a synchronous effect update.
-        if (navAction === 'shelf-remove') void Promise.resolve().then(handleRemove)
+        if (navAction === 'shelf-remove')
+        {
+            void Promise.resolve().then(handleRemove)
+        }
         // Only a new navigation should trigger this; handleRemove is re-created every render.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [navAction, location.key])
 
+    /**
+     * onTouchStart remembers where a single finger landed, unless controls or an ongoing action need the touch.
+     */
+    function handleTouchStart(event: TouchEvent<HTMLDivElement>)
+    {
+        swipeStartPosition.current = null
+
+        const isDesktop = window.matchMedia('(min-width: 640px)').matches
+        const cannotStartSwipe = isBusy || isPickerOpen || navigationDisabled || event.touches.length !== 1 || isDesktop
+
+        if (cannotStartSwipe)
+        {
+            return
+        }
+
+        const touchedControl = event.target instanceof Element && event.target.closest('button, select, input, a')
+
+        if (touchedControl)
+        {
+            return
+        }
+
+        const startingTouch = event.touches[0]
+        swipeStartPosition.current = {
+            horizontal: startingTouch.clientX,
+            vertical: startingTouch.clientY,
+        }
+    }
+
+    /**
+     * onTouchCancel forgets an interrupted gesture so it cannot change collections later.
+     */
+    function handleTouchCancel()
+    {
+        swipeStartPosition.current = null
+    }
+
+    /**
+     * onTouchEnd changes collection only for a deliberate horizontal swipe, leaving vertical scrolling alone.
+     */
+    function handleTouchEnd(event: TouchEvent<HTMLDivElement>)
+    {
+        const startingPosition = swipeStartPosition.current
+        swipeStartPosition.current = null
+
+        if (!startingPosition || isBusy || navigationDisabled || event.changedTouches.length !== 1)
+        {
+            return
+        }
+
+        const endingTouch = event.changedTouches[0]
+        const horizontalMovement = endingTouch.clientX - startingPosition.horizontal
+        const verticalMovement = endingTouch.clientY - startingPosition.vertical
+        const horizontalDistance = Math.abs(horizontalMovement)
+        const verticalDistance = Math.abs(verticalMovement)
+        const isDeliberateHorizontalSwipe = horizontalDistance >= 60 && horizontalDistance > verticalDistance * 1.5
+
+        if (isDeliberateHorizontalSwipe)
+        {
+            onSwipe(horizontalMovement > 0 ? 'next' : 'previous')
+        }
+    }
+
     return (
         <div>
-            <div className="relative touch-pan-y rounded-box sm:touch-auto"
-                onTouchStart={event =>
-                {
-                    touchStart.current = null
-                    if (isBusy || isPickerOpen || navigationDisabled || event.touches.length !== 1
-                        || window.matchMedia('(min-width: 640px)').matches) return
-                    if (event.target instanceof Element && event.target.closest('button, select, input, a')) return
-                    touchStart.current = { x: event.touches[0].clientX, y: event.touches[0].clientY }
-                }}
-                onTouchCancel={() => { touchStart.current = null }}
-                onTouchEnd={event =>
-                {
-                    const start = touchStart.current
-                    touchStart.current = null
-                    
-                    if (!start || isBusy || navigationDisabled || event.changedTouches.length !== 1) return
-
-                    const dx = event.changedTouches[0].clientX - start.x
-                    const dy = event.changedTouches[0].clientY - start.y
-                    // A deliberate horizontal swipe changes collection; vertical scrolling stays native.
-                    if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.5)
-                    {
-                        onSwipe(dx > 0 ? 'next' : 'previous')
-                    }
-                }}>
+            <div
+                className="relative touch-pan-y rounded-box sm:touch-auto"
+                onTouchStart={handleTouchStart}
+                onTouchCancel={handleTouchCancel}
+                onTouchEnd={handleTouchEnd}
+            >
                 {backgroundImage && (
                     <>
                         <img className="absolute inset-0 size-full rounded-box object-cover" src={backgroundImage} alt="" draggable={false} />
