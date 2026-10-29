@@ -230,6 +230,93 @@ class CollectionManagementApiTests
 				.andExpect(jsonPath("$.length()").value(1));
 	}
 
+	@Test
+	void selectedCollectionFiltersGamesAndReceivesNewGamesWithoutChangingDefault() throws Exception
+	{
+		String subject = newSubject();
+		UUID starting = defaultCollection(subject);
+		UUID travel = UUID.randomUUID();
+		seedCollection(subject, travel, "Travel");
+		createGame(subject, "Home game");
+		this.mockMvc.perform(post("/api/games").param("collectionId", travel.toString())
+					.with(token(subject, "write:games")).contentType(MediaType.APPLICATION_JSON)
+					.content("{\"name\":\"Travel Azul\"}"))
+				.andExpect(status().isCreated());
+
+		assertThat(gameCollection(subject, "Travel Azul")).isEqualTo(travel);
+		assertThat(defaultCollection(subject)).isEqualTo(starting);
+		this.mockMvc.perform(get("/api/games").param("collectionId", travel.toString())
+					.with(token(subject, "read:games")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(1))
+				.andExpect(jsonPath("$[0].name").value("Travel Azul"));
+		this.mockMvc.perform(get("/api/games").param("collectionId", starting.toString())
+					.with(token(subject, "read:games")))
+				.andExpect(jsonPath("$.length()").value(1))
+				.andExpect(jsonPath("$[0].name").value("Home game"));
+		this.mockMvc.perform(get("/api/games").param("collectionId", travel.toString()).param("search", " AZUL ")
+					.with(token(subject, "read:games")))
+				.andExpect(jsonPath("$.length()").value(1));
+		this.mockMvc.perform(get("/api/games").param("collectionId", travel.toString()).param("search", "Home")
+					.with(token(subject, "read:games")))
+				.andExpect(jsonPath("$.length()").value(0));
+		this.mockMvc.perform(get("/api/games").with(token(subject, "read:games")))
+				.andExpect(jsonPath("$.length()").value(2));
+	}
+
+	@Test
+	void selectedBackgroundCanBeSavedAndRemovedWithoutChangingTheDefaultBackground() throws Exception
+	{
+		String subject = newSubject();
+		UUID starting = defaultCollection(subject);
+		UUID travel = UUID.randomUUID();
+		seedCollection(subject, travel, "Travel");
+		String png = "data:image/png;base64,"
+				+ "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+		this.mockMvc.perform(put("/api/collection").param("collectionId", travel.toString())
+					.with(token(subject, "write:games")).contentType(MediaType.APPLICATION_JSON)
+					.content("{\"backgroundImage\":\"" + png + "\"}"))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.backgroundImage").value(png));
+		this.mockMvc.perform(get("/api/collection").param("collectionId", travel.toString())
+					.with(token(subject, "read:games")))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.backgroundImage").value(png));
+		this.mockMvc.perform(get("/api/collection").with(token(subject, "read:games")))
+				.andExpect(jsonPath("$.backgroundImage").doesNotExist());
+		this.mockMvc.perform(put("/api/collection").param("collectionId", travel.toString())
+					.with(token(subject, "write:games")).contentType(MediaType.APPLICATION_JSON)
+					.content("{\"backgroundImage\":null}"))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.backgroundImage").doesNotExist());
+		assertThat(defaultCollection(subject)).isEqualTo(starting);
+	}
+
+	@Test
+	void explicitForeignMissingAndMalformedCollectionIdsNeverFallBackToTheDefault() throws Exception
+	{
+		String subject = newSubject();
+		UUID starting = defaultCollection(subject);
+		UUID foreign = defaultCollection(newSubject());
+		for (UUID id : List.of(foreign, UUID.randomUUID()))
+		{
+			this.mockMvc.perform(get("/api/games").param("collectionId", id.toString())
+						.with(token(subject, "read:games"))).andExpect(status().isNotFound());
+			this.mockMvc.perform(post("/api/games").param("collectionId", id.toString())
+						.with(token(subject, "write:games")).contentType(MediaType.APPLICATION_JSON)
+						.content("{\"name\":\"Blocked\"}")).andExpect(status().isNotFound());
+			this.mockMvc.perform(get("/api/collection").param("collectionId", id.toString())
+						.with(token(subject, "read:games"))).andExpect(status().isNotFound());
+			this.mockMvc.perform(put("/api/collection").param("collectionId", id.toString())
+						.with(token(subject, "write:games")).contentType(MediaType.APPLICATION_JSON)
+						.content("{\"backgroundImage\":null}")).andExpect(status().isNotFound());
+		}
+		this.mockMvc.perform(get("/api/games").param("collectionId", "not-a-uuid")
+					.with(token(subject, "read:games"))).andExpect(status().isBadRequest());
+		this.mockMvc.perform(get("/api/collection").param("collectionId", "not-a-uuid")
+					.with(token(subject, "read:games"))).andExpect(status().isBadRequest());
+		this.mockMvc.perform(get("/api/games").with(token(subject, "read:games")))
+				.andExpect(jsonPath("$.length()").value(0));
+		assertThat(defaultCollection(subject)).isEqualTo(starting);
+	}
+
 	private String newSubject()
 	{
 		String subject = "collection-api-" + UUID.randomUUID();

@@ -14,6 +14,17 @@ public interface BoardGameRepository extends JpaRepository<BoardGame, UUID>
 
 	List<BoardGame> findAllByOwner_IdOrderByNameAsc(UUID ownerId);
 
+	/**
+	 * Lists games only from the chosen owner's collection.
+	 */
+	List<BoardGame> findAllByOwner_IdAndCollection_IdOrderByNameAsc(UUID ownerId, UUID collectionId);
+
+	/**
+	 * Searches game names within the chosen owner's collection.
+	 */
+	List<BoardGame> findAllByOwner_IdAndCollection_IdAndNameContainingIgnoreCaseOrderByNameAsc(
+			UUID ownerId, UUID collectionId, String name);
+
 	List<BoardGame> findAllByOwner_IdAndNameContainingIgnoreCaseOrderByNameAsc(UUID ownerId, String name);
 
 	// True when the owner already has a game with this name and edition (compared ignoring upper/lower case).

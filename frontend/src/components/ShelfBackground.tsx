@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth0 } from '@auth0/auth0-react'
 import { apiAudience, apiBaseUrl, responseError } from '../api/apiHelpers'
@@ -7,11 +7,16 @@ import ImagePicker from './ImagePicker'
 
 type ShelfBackgroundProps = {
     children: ReactNode
+    collectionId: string
+    navigation: ReactNode
+    onSwipe: (direction: 'next' | 'previous') => void
+    navigationDisabled: boolean
 }
 
-// Draws the user's chosen picture behind whatever is placed inside (the "Game shelf" heading),
-// and offers buttons to change or remove that picture. Changes are saved straight away.
-function ShelfBackground({ children }: ShelfBackgroundProps)
+/**
+ * Loads and edits the viewed collection's picture. Deliberate mobile swipes browse without changing the saved default.
+ */
+function ShelfBackground({ children, collectionId, navigation, onSwipe, navigationDisabled }: ShelfBackgroundProps)
 {
     const { getAccessTokenSilently } = useAuth0()
 
@@ -20,6 +25,8 @@ function ShelfBackground({ children }: ShelfBackgroundProps)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [isPickerOpen, setIsPickerOpen] = useState(false)
     const location = useLocation()
+    const touchStart = useRef<{ x: number; y: number } | null>(null)
+    const collectionUrl = `${apiBaseUrl}/api/collection?collectionId=${encodeURIComponent(collectionId)}`
 
     // useEffect runs after the component first appears, and again if the token function changes.
     // It loads the saved background once, rather than making a request during every render.
@@ -37,7 +44,7 @@ function ShelfBackground({ children }: ShelfBackgroundProps)
                 })
 
                 // Fetch the collection, including its optional background image.
-                const response = await fetch(`${apiBaseUrl}/api/collection`, {
+                const response = await fetch(collectionUrl, {
                     headers: { Authorization: `Bearer ${accessToken}` },
                 })
 
@@ -67,7 +74,7 @@ function ShelfBackground({ children }: ShelfBackgroundProps)
             // Ignore a late response if the user leaves this page before loading finishes.
             isCurrent = false
         }
-    }, [getAccessTokenSilently])
+    }, [getAccessTokenSilently, collectionUrl])
 
     // Get a token with permission to change the collection before saving or removing its picture.
     async function getWriteToken()
@@ -90,7 +97,7 @@ function ShelfBackground({ children }: ShelfBackgroundProps)
             const backgroundImage = await blobToDataUrl(image)
 
             // Send the updated background with a token allowed to write games and collections.
-            const response = await fetch(`${apiBaseUrl}/api/collection`, {
+            const response = await fetch(collectionUrl, {
                 method: 'PUT',
                 headers: {
                     Authorization: `Bearer ${await getWriteToken()}`,
@@ -130,7 +137,7 @@ function ShelfBackground({ children }: ShelfBackgroundProps)
         try
         {
             // Send null to tell the backend to clear the saved background.
-            const response = await fetch(`${apiBaseUrl}/api/collection`, {
+            const response = await fetch(collectionUrl, {
                 method: 'PUT',
                 headers: {
                     Authorization: `Bearer ${await getWriteToken()}`,
@@ -181,15 +188,43 @@ function ShelfBackground({ children }: ShelfBackgroundProps)
 
     return (
         <div>
-            <div className="relative overflow-hidden rounded-box">
+            <div className="relative touch-pan-y rounded-box sm:touch-auto"
+                onTouchStart={event =>
+                {
+                    touchStart.current = null
+                    if (isBusy || isPickerOpen || navigationDisabled || event.touches.length !== 1
+                        || window.matchMedia('(min-width: 640px)').matches) return
+                    if (event.target instanceof Element && event.target.closest('button, select, input, a')) return
+                    touchStart.current = { x: event.touches[0].clientX, y: event.touches[0].clientY }
+                }}
+                onTouchCancel={() => { touchStart.current = null }}
+                onTouchEnd={event =>
+                {
+                    const start = touchStart.current
+                    touchStart.current = null
+                    
+                    if (!start || isBusy || navigationDisabled || event.changedTouches.length !== 1) return
+
+                    const dx = event.changedTouches[0].clientX - start.x
+                    const dy = event.changedTouches[0].clientY - start.y
+                    // A deliberate horizontal swipe changes collection; vertical scrolling stays native.
+                    if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.5)
+                    {
+                        onSwipe(dx > 0 ? 'next' : 'previous')
+                    }
+                }}>
                 {backgroundImage && (
                     <>
-                        <img className="absolute inset-0 size-full object-cover" src={backgroundImage} alt="" />
+                        <img className="absolute inset-0 size-full rounded-box object-cover" src={backgroundImage} alt="" draggable={false} />
                         {/* A see-through layer in the theme colour keeps the heading text readable on any picture. */}
-                        <div className="absolute inset-0 bg-base-100/70" />
+                        <div className="absolute inset-0 rounded-box bg-base-100/70" />
                     </>
                 )}
                 <div className={backgroundImage ? 'relative px-6 pt-6' : 'relative'}>{children}</div>
+                <fieldset className="absolute right-2 top-2 z-10" disabled={isBusy || isPickerOpen}>
+                    <legend className="sr-only">Collection navigation</legend>
+                    {navigation}
+                </fieldset>
             </div>
 
             {/* The navbar's Shelf Background > Add option opens this picker; Remove runs straight away. */}

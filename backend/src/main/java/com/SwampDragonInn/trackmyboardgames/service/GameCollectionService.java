@@ -77,7 +77,8 @@ public class GameCollectionService
 	/**
 	 * Finds a collection only for its owner; missing and someone else's collections both return not found.
 	 */
-	private GameCollection findOwnedCollection(UUID collectionId, UUID ownerId)
+	@Transactional(readOnly = true)
+	public GameCollection findOwnedCollection(UUID collectionId, UUID ownerId)
 	{
 		return this.gameCollectionRepository.findByIdAndOwner_Id(collectionId, ownerId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Collection not found."));
@@ -98,7 +99,16 @@ public class GameCollectionService
 	@Transactional
 	public String getBackgroundImage(String subjectIssuer, String subject)
 	{
-		GameCollection collection = findOrCreateCollection(subjectIssuer, subject);
+		return getBackgroundImage(subjectIssuer, subject, null);
+	}
+
+	/**
+	 * Reads the chosen collection's background, or the saved default when no collection was requested.
+	 */
+	@Transactional
+	public String getBackgroundImage(String subjectIssuer, String subject, UUID collectionId)
+	{
+		GameCollection collection = resolveCollection(subjectIssuer, subject, collectionId);
 		if (collection.getBackgroundImage() == null)
 		{
 			return null;
@@ -114,7 +124,16 @@ public class GameCollectionService
 	@Transactional
 	public String saveBackground(String subjectIssuer, String subject, String backgroundImage)
 	{
-		GameCollection collection = findOrCreateCollection(subjectIssuer, subject);
+		return saveBackground(subjectIssuer, subject, backgroundImage, null);
+	}
+
+	/**
+	 * Updates only the requested collection's background; omitting its ID keeps the default-collection behavior.
+	 */
+	@Transactional
+	public String saveBackground(String subjectIssuer, String subject, String backgroundImage, UUID collectionId)
+	{
+		GameCollection collection = resolveCollection(subjectIssuer, subject, collectionId);
 		if (backgroundImage == null || backgroundImage.isBlank())
 		{
 			collection.removeBackground();
@@ -127,12 +146,12 @@ public class GameCollectionService
 	}
 
 	/**
-	 * Ensures profile setup is complete, then returns its saved default collection.
+	 * Checks the requested collection's owner, falling back to the default only when no ID was supplied.
 	 */
-	private GameCollection findOrCreateCollection(String subjectIssuer, String subject)
+	private GameCollection resolveCollection(String subjectIssuer, String subject, UUID collectionId)
 	{
 		AppUser owner = this.userProfileService.findOrCreate(subjectIssuer, subject);
 
-		return owner.getDefaultCollection();
+		return collectionId == null ? owner.getDefaultCollection() : findOwnedCollection(collectionId, owner.getId());
 	}
 }

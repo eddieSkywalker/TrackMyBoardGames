@@ -160,13 +160,38 @@ Names must be nonblank and at most 200 characters; surrounding spaces are remove
 Missing collections and another user's collections both return 404. Invalid names
 or malformed collection IDs return 400.
 
-Changing the default does not move existing games. New games and the legacy
-`/api/collection` background endpoint use the saved default; game lists and
-statistics still include all of the owner's games. Merely listing collections
+Changing the default does not move existing games. Merely listing collections
 does not change the default of an initialized profile.
 
-Collection creation/deletion, frontend selection, tiers, entitlements, limits,
-and collection-scoped statistics are not enabled yet.
+### Viewing a collection
+
+The collection page opens at the saved default. Its outlined star saves the viewed
+collection as the new default; a filled star marks the existing default. One default
+is always kept, so clicking a filled star does not clear it. Saving a different
+default does not reorder the current browsing session.
+
+On mobile (below 640px), swipe the shelf heading/background right for the next
+collection and left for the previous one. There is no wraparound. Small gestures
+and mostly vertical swipes do not switch collections. Previous/next buttons provide
+a non-gesture alternative. On desktop, the top-right ellipsis opens a collection
+dropdown; that menu is hidden on mobile. Collection order starts with the saved
+default on page entry, followed by the other collections in creation order.
+Save or cancel an open game form before switching collections.
+
+The frontend explicitly passes `collectionId` to `GET /api/games`,
+`POST /api/games`, and `GET`/`PUT /api/collection`. Listing games then filters to
+that owned collection, new games are saved there, and background reads/edits target
+that collection without changing the saved default. Editing/deleting an existing
+game still targets its unique game ID and checks ownership; it does not move games.
+Invalid or foreign collection IDs are rejected rather than silently using the default.
+
+For compatibility, game requests without `collectionId` still list all owned games
+and create games in the saved default. Background requests without an ID still use
+the default. Statistics remain owner-wide and are labeled as all-collections
+statistics when multiple collections exist; collection-scoped statistics are a later step.
+
+Collection creation/deletion, tiers, entitlements, limits, and collection-scoped
+statistics are not enabled yet. Accounts with only one collection have no collection-switching controls.
 The existing owner-wide game-name/edition uniqueness rule and API responses remain
 unchanged until game endpoints support explicit collection selection.
 

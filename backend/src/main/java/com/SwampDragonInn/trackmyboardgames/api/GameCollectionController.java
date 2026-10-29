@@ -1,11 +1,14 @@
 package com.SwampDragonInn.trackmyboardgames.api;
 
+import java.util.UUID;
+
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.validation.annotation.Validated;
 
@@ -28,22 +31,26 @@ public class GameCollectionController
         this.gameCollectionService = gameCollectionService;
     }
 
-    // Return the collection settings and its background picture (if one has been set).
+    /**
+     * Reads the selected collection's background, or the saved default when no ID was supplied.
+     */
     @GetMapping
-    public CollectionResponse get(@AuthenticationPrincipal Jwt jwt)
+    public CollectionResponse get(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) UUID collectionId)
     {
         String backgroundImage = this.gameCollectionService.getBackgroundImage(
-                jwt.getIssuer().toString(), jwt.getSubject());
+                jwt.getIssuer().toString(), jwt.getSubject(), collectionId);
         return new CollectionResponse(backgroundImage);
     }
 
-    // Save or remove the background in the collection JSON; null removes the current picture.
+    /**
+     * Saves or removes the selected collection's background without changing the saved default.
+     */
     @PutMapping
     public CollectionResponse update(@AuthenticationPrincipal Jwt jwt,
-            @Valid @RequestBody CollectionResponse request)
+            @Valid @RequestBody CollectionResponse request, @RequestParam(required = false) UUID collectionId)
     {
         String backgroundImage = this.gameCollectionService.saveBackground(
-                jwt.getIssuer().toString(), jwt.getSubject(), request.backgroundImage());
+                jwt.getIssuer().toString(), jwt.getSubject(), request.backgroundImage(), collectionId);
         return new CollectionResponse(backgroundImage);
     }
 }

@@ -80,8 +80,22 @@ public class BoardGame
 	public BoardGame(AppUser owner, String name, String edition, Integer minPlayers, Integer maxPlayers,
 			String bestPlayers, Integer playTimeMinutes, String notes)
 	{
+		this(owner, Objects.requireNonNull(owner.getDefaultCollection(), "The owner needs a starting collection."),
+				name, edition, minPlayers, maxPlayers, bestPlayers, playTimeMinutes, notes);
+	}
+
+	/**
+	 * Adds a game to the chosen owned collection without changing the user's saved default.
+	 */
+	public BoardGame(AppUser owner, GameCollection collection, String name, String edition, Integer minPlayers,
+			Integer maxPlayers, String bestPlayers, Integer playTimeMinutes, String notes)
+	{
+		if (!owner.getId().equals(collection.getOwner().getId()))
+		{
+			throw new IllegalArgumentException("The collection must belong to the game's owner.");
+		}
 		this.owner = owner;
-		this.collection = Objects.requireNonNull(owner.getDefaultCollection(), "The owner needs a starting collection.");
+		this.collection = collection;
 		updateDetails(name, edition, minPlayers, maxPlayers, bestPlayers, playTimeMinutes, notes);
 	}
 
