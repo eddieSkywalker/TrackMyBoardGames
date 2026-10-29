@@ -187,10 +187,10 @@ Invalid or foreign collection IDs are rejected rather than silently using the de
 
 For compatibility, game requests without `collectionId` still list all owned games
 and create games in the saved default. Background requests without an ID still use
-the default. Statistics remain owner-wide and are labeled as all-collections
-statistics when multiple collections exist; collection-scoped statistics are a later step.
+the default. Statistics below the shelf follow the selected collection. Accounts
+with multiple collections also see account-wide statistics above the shelf.
 
-Collection creation/deletion and collection-scoped statistics are not enabled yet.
+Collection creation/deletion endpoints are not enabled yet.
 Accounts with only one collection have no collection-switching controls.
 The existing owner-wide game-name/edition uniqueness rule and API responses remain
 unchanged; allowing duplicate names across different collections is a later step.
@@ -409,6 +409,16 @@ Migration V11 adds one saved statistics summary per owner for the first four car
 - Plays for the current calendar month, based on the played-on date rather than when the record was entered.
 - Most recently played game, based on the latest played-on date (replacing the planned group-size card).
 
+V18 keeps those account-wide summaries and adds `collection_statistics_summaries`,
+with one saved row per collection. A refresh updates the account and all its shelves
+inside the same transaction as the event receipt. Recounting all owned shelves also
+handles deleted games and late events without needing the deleted game's collection
+in the event payload. Empty shelves have real zero counts after a refresh.
+
+The migration calculates both scopes once for existing accounts. Subsequent
+changes use the existing event workflow or explicit backfill, not page reads.
+Deleting a collection removes its saved shelf summary through its foreign key.
+
 `StatisticsRefreshService` treats each new event as a reason to refresh from the owner's current database records. This deliberately uses the existing backend/database rather than an independent statistics microservice. Renames, edited plays, deleted plays, and deleted games are reflected on the next refresh; delayed events cannot restore an old snapshot. Users are processed independently, and refreshes for the same user are serialized. Summary changes and the processed-event receipt commit or roll back together.
 
 With no plays, both game highlights are empty. Equal play counts or played-on dates are resolved by game name, then edition (case-insensitive), then ID. Monthly counts keep years separate and are saved for all recorded months, so the read endpoint can select the current month even when no event arrives at midnight. The authenticated endpoint and collection-page display are described below.
@@ -435,13 +445,29 @@ Rerunning safely replaces summaries with recalculated values, rather than adding
 
 `GET /api/statistics` returns the signed-in user's four saved cards in one request. It requires an Auth0 token with `read:games`; the issuer and subject select the owner, not a browser-supplied user ID. Reading does not recalculate statistics, create a profile, or send messages. Responses use `Cache-Control: no-store`.
 
+Without `collectionId`, the response remains account-wide for existing callers.
+`GET /api/statistics?collectionId=<id>` returns the same response shape for one
+owned collection. A missing or foreign collection returns HTTP 404 rather than
+falling back to account totals. A malformed ID returns HTTP 400. A valid collection
+without a saved summary returns pending values, not invented zeros.
+
 The response includes `collectionSize`, `mostPlayed`, `playsThisMonth`, `mostRecentlyPlayed`, `month` (`YYYY-MM`), `timezone`, and `refreshedAt`. Game highlights include ID, name, edition, play count, and most recent played-on date. The current calendar month is selected using UTC, explicitly returned as `timezone: "UTC"`; it does not depend on the server's local timezone. A user-local calendar is not implemented yet.
 
 When no summary exists (including a new identity with no local profile), the endpoint returns HTTP 200 with null counts/highlights/refresh time. This means "not initialized yet", not "zero games". Backfill or a successfully consumed game/play event initializes the summary. An initialized empty collection instead returns zero counts and null game highlights. Saved results are eventually updated by the receiver; `refreshedAt` describes their age, not a guarantee that every pending event has been processed.
 
 ### Collection-page statistics
 
-The collection page displays Collection, Most Popular!, Plays This Month!, and Latest To The Table! above the game list. It requests the signed-in user's saved statistics when the component opens. Counts use large numeric text. Game selections show their title/edition and cover image when available, reusing covers from the collection's existing game request rather than fetching them separately. There are no detail captions or calculation-time messages.
+The collection page keeps the existing Collection, Most Popular!, Plays This Month!,
+and Latest To The Table! card labels. The cards below the shelf show only the selected
+collection and reload when that collection changes. Accounts with multiple collections
+also see an "All collections" set above the shelf. That account display stays mounted
+and unchanged when switching shelves. It is hidden for a single collection.
+
+Counts use large numeric text. Collection highlights reuse covers from the shelf's
+game request. Account highlights load only the highlighted games' covers, so they can
+show games from any shelf without downloading every collection. Late responses from
+an old shelf cannot replace the current display. There are no detail captions or
+calculation-time messages.
 
 Loading and request errors have separate messages, with no "not calculated yet" message. Missing counts display as dashes rather than suggesting an uninitialized collection has zero games. Actual zero counts still display as zero. Missing game selections stay blank.
 

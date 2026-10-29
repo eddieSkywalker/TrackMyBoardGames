@@ -26,7 +26,7 @@ public interface StatisticsRefreshQueryRepository extends Repository<BoardGame, 
 {
 
 	/**
-	 * Recalculates and saves one owner's collection summary in PostgreSQL.
+	 * Recalculates and saves the owner's account totals and each collection's statistics in PostgreSQL.
 	 *
 	 * <p>The caller must hold the owner lock and supply the existing transaction.
 	 * The procedure does not commit independently or return calculated data to Java.

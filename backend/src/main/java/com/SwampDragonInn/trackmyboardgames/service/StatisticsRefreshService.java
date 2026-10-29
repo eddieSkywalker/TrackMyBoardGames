@@ -21,7 +21,8 @@ import com.SwampDragonInn.trackmyboardgames.repository.StatisticsRefreshQueryRep
  * Events prompt a recount rather than adding or subtracting values from their payloads,
  * so edits, deletions, and late-arriving events use the current records.
  *
- * <p>For event processing, the saved statistics and event receipt commit together.
+ * <p>Each refresh saves account totals and separate answers for every collection.
+ * For event processing, both sets of statistics and the event receipt commit together.
  * A failed refresh rolls both back so a later delivery can retry.
  */
 @Service

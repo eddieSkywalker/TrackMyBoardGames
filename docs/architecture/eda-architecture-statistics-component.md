@@ -4,6 +4,18 @@
 
 Saving a game or play updates the user's records immediately. A background process then calculates the statistics shown on the collection page.
 
+Since V18, each refresh saves two scopes in the same transaction: account totals
+in `statistics_summaries` and separate shelf answers in
+`collection_statistics_summaries`. The existing procedure entry point calls both
+calculations. The diagrams below show the original account-wide path; collection
+reads use `CollectionStatisticsRepository` and an owner-checked `collectionId`
+through the same statistics endpoint. Page reads never recalculate either scope.
+
+The page shows account statistics above the shelf only for accounts with multiple
+collections. Statistics below the shelf follow the selected collection. Switching
+shelves keeps the account display mounted and unchanged. Existing card labels remain
+the same.
+
 ## 1. The main building blocks
 
 ```mermaid

@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
 import { apiAudience } from '../api/apiHelpers'
-import { fetchStatistics, type GameSummary, type Statistics } from '../api/statisticsApi'
+import { fetchStatistics, fetchStatisticsCovers, type GameSummary, type Statistics } from '../api/statisticsApi'
 import type { BoardGame } from '../types/boardGame'
 
 // The request can be waiting, finished, or failed. Each option carries only what it needs:
@@ -17,10 +17,19 @@ function gameName(game: GameSummary | null | undefined): string
     return game.edition ? `${game.name} (${game.edition})` : game.name
 }
 
-// Shows saved statistics when the collection page opens. The backend calculates changes separately.
-function CollectionStatistics({ games }: { games: BoardGame[] })
+type CollectionStatisticsProps = {
+    games?: BoardGame[]
+    collectionId?: string
+    title?: string
+}
+
+/** Shows saved account totals or one collection's answers. Background events handle the calculations. */
+function CollectionStatistics({ games = [], collectionId, title }: CollectionStatisticsProps)
 {
     const { getAccessTokenSilently } = useAuth0()
+    const titleId = useId()
+    const [accountCovers, setAccountCovers] = useState<Record<string, string | null>>({})
+    const [coverError, setCoverError] = useState<string | null>(null)
     // useState gives us a pair: the value React remembers and a function for changing it.
     // Start with "loading"; setState tells React to update the display when the request finishes.
     // <LoadState> limits the value to the three options described above.
@@ -35,6 +44,10 @@ function CollectionStatistics({ games }: { games: BoardGame[] })
 
         async function loadStatistics()
         {
+            setState({ status: 'loading' })
+            setAccountCovers({})
+            setCoverError(null)
+
             try
             {
                 // Get proof that the user is signed in before asking for their saved statistics.
@@ -42,9 +55,38 @@ function CollectionStatistics({ games }: { games: BoardGame[] })
                     authorizationParams: { audience: apiAudience, scope: 'read:games' },
                 })
                 // The user may have left while we were waiting for their token.
-                if (!isCurrent) return
-                const statistics = await fetchStatistics(accessToken, controller.signal)
-                if (isCurrent) setState({ status: 'loaded', statistics })
+                if (!isCurrent)
+                {
+                    return
+                }
+
+                const statistics = await fetchStatistics(accessToken, controller.signal, collectionId)
+                if (!isCurrent)
+                {
+                    return
+                }
+
+                setState({ status: 'loaded', statistics })
+
+                // Account highlights may come from any shelf. Collection highlights reuse the shelf's loaded covers.
+                if (!collectionId)
+                {
+                    try
+                    {
+                        const covers = await fetchStatisticsCovers(accessToken, controller.signal, statistics)
+                        if (isCurrent)
+                        {
+                            setAccountCovers(covers)
+                        }
+                    }
+                    catch (error)
+                    {
+                        if (isCurrent)
+                        {
+                            setCoverError(error instanceof Error ? error.message : 'Could not load the highlighted game covers.')
+                        }
+                    }
+                }
             }
             catch (error)
             {
@@ -66,13 +108,17 @@ function CollectionStatistics({ games }: { games: BoardGame[] })
             isCurrent = false
             controller.abort()
         }
-    }, [getAccessTokenSilently])
+    }, [getAccessTokenSilently, collectionId])
 
     // Show the values the backend supplied. Missing counts show a dash; actual zeros display as zero.
     const statistics = state.status === 'loaded' ? state.statistics : null
     // Reuse covers already loaded for the collection, matching each selected game by its ID.
-    const mostPlayedCover = games.find(game => game.id === statistics?.mostPlayed?.gameId)?.coverImage
-    const mostRecentlyPlayedCover = games.find(game => game.id === statistics?.mostRecentlyPlayed?.gameId)?.coverImage
+    const mostPlayedCover = collectionId
+        ? games.find(game => game.id === statistics?.mostPlayed?.gameId)?.coverImage
+        : accountCovers[statistics?.mostPlayed?.gameId ?? '']
+    const mostRecentlyPlayedCover = collectionId
+        ? games.find(game => game.id === statistics?.mostRecentlyPlayed?.gameId)?.coverImage
+        : accountCovers[statistics?.mostRecentlyPlayed?.gameId ?? '']
 
     const cards = [
         {
@@ -106,13 +152,18 @@ function CollectionStatistics({ games }: { games: BoardGame[] })
     ]
 
     return (
-        <section className="mt-6" aria-labelledby="collection-statistics-title" aria-busy={state.status === 'loading'}>
-            {/* <h2 id="collection-statistics-title" className="mb-3 text-base font-bold">Statistics</h2> */}
+        <section className="mt-6" aria-labelledby={titleId} aria-busy={state.status === 'loading'}>
+            <h2 id={titleId} className={title ? 'mb-3 text-sm font-semibold' : 'sr-only'}>{title ?? 'Statistics'}</h2>
 
             {state.status === 'loading' && <p className="mb-3 text-sm text-base-content/70" role="status">Loading your statistics...</p>}
             {state.status === 'error' && (
                 <p className="alert alert-error mb-3 text-sm" role="alert">
                     Could not load your statistics. {state.message} Refresh the page to try again.
+                </p>
+            )}
+            {coverError && (
+                <p className="alert alert-error mb-3 text-sm" role="alert">
+                    Could not load the highlighted game covers. {coverError}
                 </p>
             )}
             <div className="mx-auto grid min-w-0 max-w-3xl auto-rows-fr grid-cols-2 gap-3 lg:grid-cols-4">

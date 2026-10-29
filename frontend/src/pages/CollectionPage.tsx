@@ -146,17 +146,26 @@ function CollectionBrowser()
             </AppLayout>
         )
     }
-    // A different collection key clears the previous shelf's games, forms, and pending loads.
+    // Account totals stay mounted above the shelf while a different collection resets only its own view.
     return (
-        <CollectionView
-            key={selectedCollection.id}
-            collections={collections}
-            selected={selectedCollection}
-            savingDefault={savingDefault}
-            defaultError={errorMessage}
-            onMakeDefault={makeDefault}
-            onSelect={selectCollection}
-        />
+        <AppLayout>
+            <section className="mx-auto max-w-6xl py-10 sm:py-7">
+                {collections.length > 1 && (
+                    <div className="mb-6">
+                        <CollectionStatistics title="All collections" />
+                    </div>
+                )}
+                <CollectionView
+                    key={selectedCollection.id}
+                    collections={collections}
+                    selected={selectedCollection}
+                    savingDefault={savingDefault}
+                    defaultError={errorMessage}
+                    onMakeDefault={makeDefault}
+                    onSelect={selectCollection}
+                />
+            </section>
+        </AppLayout>
     )
 }
 
@@ -172,7 +181,7 @@ type CollectionViewProps = {
 /** A new view resets old games, pending loads, and forms before displaying another collection. */
 function CollectionView({ collections, selected, savingDefault, defaultError, onMakeDefault, onSelect }: CollectionViewProps)
 {
-    const { getAccessTokenSilently, user } = useAuth0()
+    const { getAccessTokenSilently } = useAuth0()
     const [games, setGames] = useState<BoardGame[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [hasLoadedGames, setHasLoadedGames] = useState(false)
@@ -405,8 +414,7 @@ function CollectionView({ collections, selected, savingDefault, defaultError, on
     }, [navAction, navigate, location.pathname])
     // Render the form and the collection's loading, empty, error, and game-list states.
     return (
-        <AppLayout>
-            <section className="mx-auto max-w-6xl py-10 sm:py-7">
+        <>
                 <ShelfBackground key={selected.id} collectionId={selected.id} onSwipe={swipeCollection}
                     navigationDisabled={navigationDisabled}
                     navigation={<CollectionNavigation collections={collections} selected={selected}
@@ -429,11 +437,9 @@ function CollectionView({ collections, selected, savingDefault, defaultError, on
                 </div>
                 </ShelfBackground>
 
-                {/* Start with fresh statistics when the signed-in account changes. */}
-                {collections.length > 1 && (
-                    <h2 className="mt-6 text-sm font-semibold">All collections statistics (not just this shelf)</h2>
-                )}
-                <CollectionStatistics key={user?.sub ?? 'signed-in-user'} games={games} />
+                {/* These answers belong only to the selected shelf and reset with its keyed view. */}
+                <CollectionStatistics collectionId={selected.id} games={games}
+                    title={collections.length > 1 ? 'This collection' : undefined} />
 
                 {defaultError && <p className="alert alert-error mt-5 text-sm" role="alert">{defaultError}</p>}
                 {errorMessage && (
@@ -491,8 +497,7 @@ function CollectionView({ collections, selected, savingDefault, defaultError, on
                         />
                     )}
                 </div>
-            </section>
-        </AppLayout>
+        </>
     )
 }
 

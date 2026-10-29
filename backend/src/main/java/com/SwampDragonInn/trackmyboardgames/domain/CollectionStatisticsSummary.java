@@ -16,10 +16,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 /**
- * Stores one owner's calculated collection statistics, currently used by the collection summary cards.
+ * Holds the saved answers shown by the statistics cards.
  *
  * <p>Game and play changes update these results in the background so reads do not recount the history.
- * The existing database table remains owner-scoped until multi-collection support is introduced.
+ * This entity maps the account-wide table. Collection reads reuse the same answer shape.
  */
 @Entity
 @Table(name = "statistics_summaries")

@@ -28,6 +28,7 @@ import com.SwampDragonInn.trackmyboardgames.repository.StatisticsProcessedEventR
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSummaryRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsRefreshQueryRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.AppUserRepository;
+import com.SwampDragonInn.trackmyboardgames.repository.CollectionStatisticsRepository;
 import com.SwampDragonInn.trackmyboardgames.service.StatisticsRefreshService;
 import com.SwampDragonInn.trackmyboardgames.service.UserProfileService;
 
@@ -49,6 +50,9 @@ class StatisticsRefreshTests
 
 	@Autowired
 	private StatisticsSummaryRepository summaries;
+
+	@Autowired
+	private CollectionStatisticsRepository collectionSummaries;
 
 	@Autowired
 	private StatisticsRefreshQueryRepository refreshQueries;
@@ -210,19 +214,26 @@ class StatisticsRefreshTests
 	{
 		UUID eventId = event();
 		game(this.ownerId, "Azul", "");
+		UUID collectionId = transaction().execute(status ->
+				this.entityManager.find(AppUser.class, this.ownerId).getDefaultCollection().getId());
 
 		assertThatThrownBy(() -> transaction().executeWithoutResult(status ->
 		{
 			this.service.refresh(eventId, this.ownerId);
 			assertThat(summary().getCollectionSize()).isEqualTo(1);
+			assertThat(this.collectionSummaries.findByCollectionAndOwner(collectionId, this.ownerId)
+					.orElseThrow().getCollectionSize()).isEqualTo(1);
 			assertThat(this.receipts.findById(eventId)).isPresent();
 			throw new IllegalStateException("Simulated failure after saving statistics");
 		}))
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessage("Simulated failure after saving statistics");
 		assertThat(this.summaries.findById(this.ownerId)).isEmpty();
+		assertThat(this.collectionSummaries.findByCollectionAndOwner(collectionId, this.ownerId)).isEmpty();
 		assertThat(this.receipts.findById(eventId)).isEmpty();
 		assertThat(this.service.refresh(eventId, this.ownerId)).isTrue();
+		assertThat(this.collectionSummaries.findByCollectionAndOwner(collectionId, this.ownerId)
+				.orElseThrow().getCollectionSize()).isEqualTo(1);
 	}
 
 	@Test
