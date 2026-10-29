@@ -183,7 +183,7 @@ class CollectionAccessPolicyTests
 		JdbcTemplate jdbc = mock(JdbcTemplate.class);
 		CollectionPriceRepository priceRepository = mock(CollectionPriceRepository.class);
 
-		when(collections.findForPayment(collectionId, ownerId)).thenReturn(Optional.of(collection));
+		when(collections.findForUpdate(collectionId, ownerId)).thenReturn(Optional.of(collection));
 		when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
 		when(priceRepository.findCurrent()).thenReturn(new PriceVersion(UUID.randomUUID(), prices));
 

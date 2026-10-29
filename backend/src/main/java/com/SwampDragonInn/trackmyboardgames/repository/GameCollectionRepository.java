@@ -34,9 +34,10 @@ public interface GameCollectionRepository extends JpaRepository<GameCollection, 
 	Optional<GameCollection> findByIdAndOwner_Id(UUID id, UUID ownerId);
 
 	/**
-	 * Makes payments for the same collection take turns so totals and paid months cannot overwrite each other.
+	 * Makes payments and new-game saves for the same collection take turns.
+	 * This keeps payment totals current and prevents two requests from taking the last game slot.
 	 */
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select c from GameCollection c where c.id = :collectionId and c.owner.id = :ownerId")
-	Optional<GameCollection> findForPayment(@Param("collectionId") UUID collectionId, @Param("ownerId") UUID ownerId);
+	Optional<GameCollection> findForUpdate(@Param("collectionId") UUID collectionId, @Param("ownerId") UUID ownerId);
 }

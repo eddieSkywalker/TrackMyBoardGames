@@ -250,10 +250,24 @@ as with pricing. Deployment credentials and roles are configured separately.
 Limit changes affect subsequent allowance checks for existing collections too;
 they do not delete games or rewrite a collection's earned tier.
 
-This step adds storage and policy only. **Game-creation limits are not enforced yet.**
+New-game saves enforce the current database-managed allowance for the selected
+collection, including older requests that omit a collection ID and use the saved
+default. Every saved game counts, regardless of search filters.
+
+The backend locks the collection before counting and saving, so simultaneous
+requests cannot both take its last available slot. Payments use the same lock,
+and tier details are reloaded before checking access. Expired or inactive
+Business subscriptions use the earned fallback tier's limit.
+
+A full collection receives HTTP 409 with a readable explanation. The existing
+frontend error display keeps the form open so entered details are not lost.
+Rejected saves create neither a game nor a game-added event. Existing collections
+at or above their allowance can still be viewed, edited, and reduced by deleting
+games; no existing games are automatically removed.
+
 There is no purchase, grant, cancellation, or additional-collection creation endpoint;
 clients cannot assign paid tiers through collection settings.
-Enforcement, payment-approved creation, and Business cancellation/expiry
+Payment-approved collection creation and Business cancellation/expiry
 retention and deletion will be implemented separately. Retention must use the
 earned fallback tier's limit, not assume every Business collection keeps Pro.
 

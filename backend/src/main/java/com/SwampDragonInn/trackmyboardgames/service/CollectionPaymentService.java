@@ -96,9 +96,10 @@ public class CollectionPaymentService
 	@Transactional
 	public void recordConfirmedPayment(ConfirmedPayment payment)
 	{
-		// Find the owner's collection and lock it so payments for this collection are processed one at a time.
-		GameCollection collection = this.collections.findForPayment(payment.collectionId(), payment.ownerId())
-				.orElseThrow(() -> new IllegalArgumentException("The payment collection does not belong to this owner."));
+		// Find this account's collection and lock it until this transaction finishes.
+        // Other payments and game additions for the same collection wait their turn.
+		GameCollection collection = this.collections.findForUpdate(payment.collectionId(), payment.ownerId())
+				.orElseThrow(() -> new IllegalArgumentException("The collection was not found for this account."));
 
 		// Reload its latest values in case another payment finished while this request waited for the lock.
 		this.entityManager.refresh(collection);

@@ -15,6 +15,11 @@ public interface BoardGameRepository extends JpaRepository<BoardGame, UUID>
 	List<BoardGame> findAllByOwner_IdOrderByNameAsc(UUID ownerId);
 
 	/**
+	 * Counts only games in the chosen owner's collection when checking its game allowance.
+	 */
+	long countByOwner_IdAndCollection_Id(UUID ownerId, UUID collectionId);
+
+	/**
 	 * Lists games only from the chosen owner's collection.
 	 */
 	List<BoardGame> findAllByOwner_IdAndCollection_IdOrderByNameAsc(UUID ownerId, UUID collectionId);
