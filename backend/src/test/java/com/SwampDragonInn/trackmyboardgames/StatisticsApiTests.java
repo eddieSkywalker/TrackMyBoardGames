@@ -25,8 +25,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.SwampDragonInn.trackmyboardgames.domain.AppUser;
-import com.SwampDragonInn.trackmyboardgames.domain.StatisticsSummary;
-import com.SwampDragonInn.trackmyboardgames.domain.StatisticsSummary.GameSummary;
+import com.SwampDragonInn.trackmyboardgames.domain.CollectionStatisticsSummary;
+import com.SwampDragonInn.trackmyboardgames.domain.CollectionStatisticsSummary.GameSummary;
 import com.SwampDragonInn.trackmyboardgames.repository.AppUserRepository;
 
 import jakarta.persistence.EntityManager;
@@ -69,7 +69,7 @@ class StatisticsApiTests
 		UUID mostPlayedId = UUID.randomUUID();
 		UUID mostRecentId = UUID.randomUUID();
 		Instant refreshedAt = Instant.parse("2026-01-01T10:00:00Z");
-		this.entityManager.persist(new StatisticsSummary(owner.getId(), 12,
+		this.entityManager.persist(new CollectionStatisticsSummary(owner.getId(), 12,
 				new GameSummary(mostPlayedId, "Azul", "", 8, LocalDate.of(2026, 1, 1)),
 				new GameSummary(mostRecentId, "Wingspan", "Asia", 2, LocalDate.of(2026, 1, 2)),
 				Map.of(month.toString(), 5L, month.minusMonths(1).toString(), 99L), refreshedAt));
@@ -101,7 +101,7 @@ class StatisticsApiTests
 	{
 		String subject = "empty-" + UUID.randomUUID();
 		AppUser owner = owner(ISSUER, subject);
-		this.entityManager.persist(new StatisticsSummary(owner.getId(), 0, null, null, Map.of(), Instant.now()));
+		this.entityManager.persist(new CollectionStatisticsSummary(owner.getId(), 0, null, null, Map.of(), Instant.now()));
 		this.entityManager.flush();
 
 		this.mvc.perform(get("/api/statistics").with(token(ISSUER, subject)))
@@ -134,7 +134,7 @@ class StatisticsApiTests
 	{
 		String subject = "private-" + UUID.randomUUID();
 		AppUser owner = owner(ISSUER, subject);
-		this.entityManager.persist(new StatisticsSummary(owner.getId(), 73, null, null, Map.of(), Instant.now()));
+		this.entityManager.persist(new CollectionStatisticsSummary(owner.getId(), 73, null, null, Map.of(), Instant.now()));
 		this.entityManager.flush();
 
 		// A caller-supplied owner ID does not change which identity the endpoint looks up.

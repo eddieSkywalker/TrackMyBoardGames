@@ -27,14 +27,14 @@ public class StatisticsController
 
 	// Handles the collection page's request for saved statistics.
 	@GetMapping
-	public ResponseEntity<StatisticsResponse> get(@AuthenticationPrincipal Jwt jwt)
+	public ResponseEntity<CollectionStatisticsResponse> get(@AuthenticationPrincipal Jwt jwt)
 	{
 		// The validated token identifies who issued the login and which user signed in.
 		String issuer = jwt.getIssuer().toString();
 		String subject = jwt.getSubject();
 
 		// Look up the statistics already saved for this user instead of calculating them again.
-		StatisticsResponse savedStatistics = this.statistics.read(issuer, subject);
+		CollectionStatisticsResponse savedStatistics = this.statistics.readCollectionStats(issuer, subject);
 
 		// Send the statistics back to the page. Tell browsers and other caches not to save a copy,
 		// so future requests fetch the saved results again rather than reuse an old response.

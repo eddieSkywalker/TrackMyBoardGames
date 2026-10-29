@@ -1,10 +1,6 @@
 package com.SwampDragonInn.trackmyboardgames.service;
 
 import java.time.Instant;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -13,41 +9,57 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.SwampDragonInn.trackmyboardgames.domain.StatisticsSummary;
-import com.SwampDragonInn.trackmyboardgames.domain.StatisticsSummary.GameSummary;
 import com.SwampDragonInn.trackmyboardgames.repository.AppUserRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsProcessedEventRepository;
-import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSourceRepository;
-import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSourceRepository.GameTotals;
-import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSourceRepository.MonthTotal;
-import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSummaryRepository;
+import com.SwampDragonInn.trackmyboardgames.repository.StatisticsRefreshQueryRepository;
 
-// Rebuilds the four statistics cards when the receiver delivers a game or play event.
-// The event is a prompt to check current records, not an instruction to add or subtract one:
-// that makes late-arriving events safe, including edits and deletions. The saved cards and the
-// event's receipt commit together; a failed refresh rolls both back so RabbitMQ can retry.
+/**
+ * Coordinates rebuilding saved statistics, primarily after RabbitMQ delivers game or play changes.
+ *
+ * <p>Calls a PostgreSQL procedure to calculate and save results from current game and play records.
+ * Also supports startup backfill without RabbitMQ. Frontend requests use StatisticsReadService instead.
+ * Events prompt a recount rather than adding or subtracting values from their payloads,
+ * so edits, deletions, and late-arriving events use the current records.
+ *
+ * <p>For event processing, the saved statistics and event receipt commit together.
+ * A failed refresh rolls both back so a later delivery can retry.
+ */
 @Service
 public class StatisticsRefreshService
 {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(StatisticsRefreshService.class);
 	private final AppUserRepository users;
-	private final StatisticsSourceRepository source;
-	private final StatisticsSummaryRepository summaries;
+	private final StatisticsRefreshQueryRepository refreshQueries;
 	private final StatisticsProcessedEventRepository processedEvents;
 
-	// Keeps source reads, saved statistics, and duplicate receipts in their existing repository layers.
-	public StatisticsRefreshService(AppUserRepository users, StatisticsSourceRepository source,
-			StatisticsSummaryRepository summaries, StatisticsProcessedEventRepository processedEvents)
+	/**
+	 * Connects owner locking, database procedure calls, and duplicate-event receipts.
+	 *
+	 * @param users owner lookup and locking
+	 * @param refreshQueries procedures that calculate and save statistics in PostgreSQL
+	 * @param processedEvents duplicate-event receipts
+	 */
+	public StatisticsRefreshService(AppUserRepository users, StatisticsRefreshQueryRepository refreshQueries,
+			StatisticsProcessedEventRepository processedEvents)
 	{
 		this.users = users;
-		this.source = source;
-		this.summaries = summaries;
+		this.refreshQueries = refreshQueries;
 		this.processedEvents = processedEvents;
 	}
 
-	// Refreshes one owner's cards for a new event. Returns false when the same event was already handled.
-	// Only the validated receiver should call this; it is not a public API.
+	/**
+	 * Refreshes one owner's saved statistics for an event validated by the message consumer.
+	 *
+	 * <p>The owner lock serializes refreshes until this transaction commits or rolls back.
+	 * The event receipt is recorded in the same transaction as the replacement statistics.
+	 *
+	 * @param eventId unique ID of the delivered event
+	 * @param ownerId owner whose statistics to rebuild
+	 * @return true if refreshed, or false if the event was already processed
+	 * @throws NullPointerException if either identifier is null
+	 * @throws IllegalStateException if the owner no longer exists
+	 */
 	@Transactional
 	public boolean refresh(UUID eventId, UUID ownerId)
 	{
@@ -67,13 +79,20 @@ public class StatisticsRefreshService
 			return false;
 		}
 
-		rebuildSummary(ownerId, now);
+		this.refreshQueries.refreshCollectionStatistics(ownerId, now);
 		return true;
 	}
 
-	// Calculates starting statistics without inventing a RabbitMQ event or processed-event receipt.
-	// Uses the same owner lock as live events so a backfill and a receiver cannot save over one another.
-	// The caller processes users separately, so this transaction only covers one user's calculations.
+	/**
+	 * Rebuilds an owner's statistics without creating an event or processing receipt.
+	 *
+	 * <p>Uses the same owner lock as event-driven refreshes to prevent competing saves.
+	 * The backfill runner calls this separately for each owner, giving each its own transaction.
+	 *
+	 * @param ownerId owner whose statistics to rebuild
+	 * @return true if rebuilt, or false if the owner was deleted before processing
+	 * @throws NullPointerException if the owner ID is null
+	 */
 	@Transactional
 	public boolean backfill(UUID ownerId)
 	{
@@ -84,84 +103,8 @@ public class StatisticsRefreshService
 			LOGGER.warn("Skipping statistics backfill for owner {} because the account no longer exists.", ownerId);
 			return false;
 		}
-		rebuildSummary(ownerId, Instant.now());
+		this.refreshQueries.refreshCollectionStatistics(ownerId, Instant.now());
 		return true;
 	}
 
-	// Both event processing and backfill use this calculation, keeping the four cards consistent.
-	private void rebuildSummary(UUID ownerId, Instant now)
-	{
-		// Load one set of totals for each game, including games that have never been played.
-		List<GameTotals> games = this.source.findGameTotals(ownerId);
-
-		// Give tied games a consistent order: name first, then edition, then their unique ID.
-		Comparator<GameTotals> alphabetical = Comparator
-				.comparing((GameTotals game) -> game.getName(), String.CASE_INSENSITIVE_ORDER)
-				.thenComparing(game -> game.getEdition(), String.CASE_INSENSITIVE_ORDER)
-				.thenComparing(game -> game.getGameId());
-
-		GameSummary mostPlayed = findMostPlayed(games, alphabetical);
-		GameSummary mostRecent = findMostRecentlyPlayed(games, alphabetical);
-		Map<String, Long> months = countPlaysByMonth(ownerId);
-
-		// Save all four cards together. The number of game totals is the collection size.
-		StatisticsSummary summary = new StatisticsSummary(
-				ownerId, games.size(), mostPlayed, mostRecent, months, now);
-		this.summaries.saveAndFlush(summary);
-	}
-
-	// Chooses the game with the highest play count, leaving out games that have never been played.
-	private GameSummary findMostPlayed(List<GameTotals> games, Comparator<GameTotals> alphabetical)
-	{
-		Comparator<GameTotals> mostPlaysFirst = Comparator
-				.comparingLong((GameTotals game) -> game.getPlayCount())
-				.reversed()
-				.thenComparing(alphabetical);
-
-		return games.stream()
-				.filter(game -> game.getPlayCount() > 0)
-				.sorted(mostPlaysFirst)
-				.findFirst()
-				.map(game -> toGameSummary(game))
-				.orElse(null);
-	}
-
-	// Chooses the game with the newest played-on date, ignoring games that have never been played.
-	private GameSummary findMostRecentlyPlayed(List<GameTotals> games, Comparator<GameTotals> alphabetical)
-	{
-		Comparator<GameTotals> newestDateFirst = Comparator
-				.comparing((GameTotals game) -> game.getLastPlayedOn())
-				.reversed()
-				.thenComparing(alphabetical);
-
-		return games.stream()
-				.filter(game -> game.getLastPlayedOn() != null)
-				.sorted(newestDateFirst)
-				.findFirst()
-				.map(game -> toGameSummary(game))
-				.orElse(null);
-	}
-
-	// Stores each month's count under a year-month key, such as "2026-10".
-	// The future read endpoint can look up the current month without recalculating the history.
-	private Map<String, Long> countPlaysByMonth(UUID ownerId)
-	{
-		Map<String, Long> months = new HashMap<>();
-		for (MonthTotal total : this.source.findMonthlyTotals(ownerId))
-		{
-			months.put(total.getMonth(), total.getPlayCount());
-		}
-		return months;
-	}
-
-	// Copies the game's name and play details into the small object used by either game card.
-	private GameSummary toGameSummary(GameTotals game)
-	{
-		return new GameSummary(
-            game.getGameId(), 
-            game.getName(), 
-            game.getEdition(),
-			game.getPlayCount(), 
-            game.getLastPlayedOn());
-	}
 }
