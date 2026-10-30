@@ -17,14 +17,18 @@ import com.SwampDragonInn.trackmyboardgames.api.BoardGameRequest;
 import com.SwampDragonInn.trackmyboardgames.api.BoardGameResponse;
 import com.SwampDragonInn.trackmyboardgames.domain.AppUser;
 import com.SwampDragonInn.trackmyboardgames.domain.BoardGame;
+import com.SwampDragonInn.trackmyboardgames.domain.GameCollection;
 import com.SwampDragonInn.trackmyboardgames.domain.OutboxEvent;
 import com.SwampDragonInn.trackmyboardgames.event.GameSnapshot;
 import com.SwampDragonInn.trackmyboardgames.repository.BoardGameRepository;
+import com.SwampDragonInn.trackmyboardgames.repository.GameCollectionRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.GamePlayRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.OutboxEventRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.GamePlayRepository.PlayStats;
 
 import tools.jackson.databind.json.JsonMapper;
+
+import jakarta.persistence.EntityManager;
 
 // Applies game rules and ensures every database operation is limited to the signed-in user's profile.
 @Service
@@ -37,6 +41,10 @@ public class BoardGameService
 	private final ImageUploadChecker imageUploadChecker;
 	private final OutboxEventRepository outboxEventRepository;
 	private final JsonMapper jsonMapper;
+	private final GameCollectionService gameCollectionService;
+	private final GameCollectionRepository collectionRepository;
+	private final CollectionAccessPolicy accessPolicy;
+	private final EntityManager entityManager;
 
 	/**
 	 * Supplies the helpers used to save games, read play totals, and record game-change events.
@@ -47,10 +55,15 @@ public class BoardGameService
 	 * @param imageUploadChecker checks that a submitted cover is an allowed image
 	 * @param outboxEventRepository saves game-change events for later delivery
 	 * @param jsonMapper converts event details into JSON text
+	 * @param gameCollectionService checks that the requested collection belongs to the user
+	 * @param collectionRepository locks the collection while checking and filling a game slot
+	 * @param accessPolicy determines the current tier and saved game allowance
+	 * @param entityManager reloads collection details after waiting for another request
 	 */
 	public BoardGameService(BoardGameRepository boardGameRepository, GamePlayRepository gamePlayRepository,
 			UserProfileService userProfileService, ImageUploadChecker imageUploadChecker,
-			OutboxEventRepository outboxEventRepository, JsonMapper jsonMapper)
+			OutboxEventRepository outboxEventRepository, JsonMapper jsonMapper, GameCollectionService gameCollectionService,
+			GameCollectionRepository collectionRepository, CollectionAccessPolicy accessPolicy, EntityManager entityManager)
 	{
 		this.imageUploadChecker = imageUploadChecker;
 		this.boardGameRepository = boardGameRepository;
@@ -58,6 +71,10 @@ public class BoardGameService
 		this.userProfileService = userProfileService;
 		this.outboxEventRepository = outboxEventRepository;
 		this.jsonMapper = jsonMapper;
+		this.gameCollectionService = gameCollectionService;
+		this.collectionRepository = collectionRepository;
+		this.accessPolicy = accessPolicy;
+		this.entityManager = entityManager;
 	}
 
 	/**
@@ -71,9 +88,30 @@ public class BoardGameService
 	@Transactional
 	public List<BoardGameResponse> findAll(String subjectIssuer, String subject, String search)
 	{
+		return findAll(subjectIssuer, subject, search, null);
+	}
+
+	/**
+	 * Reads games from the chosen owned collection. Older callers without a collection ID still read all their games.
+	 */
+	@Transactional
+	public List<BoardGameResponse> findAll(String subjectIssuer, String subject, String search, UUID collectionId)
+	{
 		AppUser owner = this.userProfileService.findOrCreate(subjectIssuer, subject);
 
-		List<BoardGame> games = findGamesByOwner(owner.getId(), search);
+		List<BoardGame> games;
+		if (collectionId == null)
+		{
+			games = findGamesByOwner(owner.getId(), search);
+		}
+		else
+		{
+			this.gameCollectionService.findOwnedCollection(collectionId, owner.getId());
+			games = search != null && !search.isBlank()
+					? this.boardGameRepository.findAllByOwner_IdAndCollection_IdAndNameContainingIgnoreCaseOrderByNameAsc(
+							owner.getId(), collectionId, search.trim())
+					: this.boardGameRepository.findAllByOwner_IdAndCollection_IdOrderByNameAsc(owner.getId(), collectionId);
+		}
 		Map<UUID, PlayStats> statsByGameId = loadStatsByGameId(owner.getId());
 
 		List<BoardGameResponse> responses = new ArrayList<>();
@@ -115,17 +153,41 @@ public class BoardGameService
 	@Transactional
 	public BoardGameResponse create(String subjectIssuer, String subject, BoardGameRequest request)
 	{
+		return create(subjectIssuer, subject, request, null);
+	}
+
+	/**
+	 * Saves a game in the collection being viewed, or in the saved default for older callers without a collection ID.
+	 */
+	@Transactional
+	public BoardGameResponse create(String subjectIssuer, String subject, BoardGameRequest request, UUID collectionId)
+	{
 		validatePlayerRange(request);
+
+		// Choose the requested collection, or the user's saved default when no collection was supplied.
 		AppUser owner = this.userProfileService.findOrCreate(subjectIssuer, subject);
+		UUID targetCollectionId = collectionId == null ? owner.getDefaultCollection().getId() : collectionId;
+		GameCollection collection = lockCollectionForNewGame(targetCollectionId, owner.getId());
 		String name = request.name().trim();
 		String edition = cleanEdition(request.edition());
 
+		// Keep the existing duplicate-name check before checking the collection's remaining space.
 		if (this.boardGameRepository.existsByOwner_IdAndNameIgnoreCaseAndEditionIgnoreCase(owner.getId(), name, edition))
 		{
 			throw duplicateGame();
 		}
 
-		BoardGame game = new BoardGame(owner, name, edition, request.minPlayers(),
+		// Count every saved game in this collection, regardless of the current search or page view.
+		int gameLimit = this.accessPolicy.gameLimit(collection, Instant.now());
+		long gameCount = this.boardGameRepository.countByOwner_IdAndCollection_Id(owner.getId(), collection.getId());
+
+		if (gameCount >= gameLimit)
+		{
+			throw new CollectionGameLimitException(gameLimit);
+		}
+
+		// Save the game and its event together. The collection lock stays held until the transaction finishes.
+		BoardGame game = new BoardGame(owner, collection, name, edition, request.minPlayers(),
 				request.maxPlayers(), request.bestPlayers(), request.playTimeMinutes(), request.notes());
 
 		applyCover(game, request.coverImage());
@@ -133,6 +195,18 @@ public class BoardGameService
 		saveGameEvent("GameAdded", owner.getId(), savedGame, savedGame.getCreatedAt());
 
 		return toResponse(savedGame, null);
+	}
+
+	/**
+	 * Reserves a collection while adding a game and reloads any tier changes made while this request waited.
+	 * Missing and someone else's collections both return the same not-found response.
+	 */
+	private GameCollection lockCollectionForNewGame(UUID collectionId, UUID ownerId)
+	{
+		GameCollection collection = this.collectionRepository.findForUpdate(collectionId, ownerId)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Collection not found."));
+		this.entityManager.refresh(collection);
+		return collection;
 	}
 
 	/**

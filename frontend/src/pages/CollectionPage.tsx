@@ -6,15 +6,188 @@ import BoardGameForm from '../components/BoardGameForm'
 import BoardGameCollection from '../components/BoardGameCollection'
 import CollectionStatistics from '../components/CollectionStatistics'
 import ShelfBackground from '../components/ShelfBackground'
+import CollectionNavigation from '../components/CollectionNavigation'
+import { fetchCollections, saveDefaultCollection, type GameCollectionSummary } from '../api/collectionApi'
 import { apiAudience, apiBaseUrl, responseError } from '../api/apiHelpers'
 import type { BoardGame, GameFormValues } from '../types/boardGame'
+import { useCurrentCollection } from '../hooks/useCurrentCollection'
 
-// Shows the signed-in user's games and lets them add games to their own collection.
+/** Account changes start a fresh browsing session without keeping the previous account's forms or data. */
 function CollectionPage()
 {
-    const { getAccessTokenSilently, user } = useAuth0()
+    const { user } = useAuth0()
+    const loginProvider = user?.iss ?? ''
+    const userId = user?.sub ?? ''
+    const accountKey = `${loginProvider}:${userId}`
+
+    // A different account key makes React discard the previous account's browsing state.
+    return (
+        <CollectionBrowser key={accountKey} />
+    )
+}
+
+/** Keeps temporary viewing separate from the saved default; starring does not reorder the current session. */
+function CollectionBrowser()
+{
+    const { getAccessTokenSilently } = useAuth0()
+    const [collections, setCollections] = useState<GameCollectionSummary[]>([])
+    const { currentCollectionId: selectedId, setCurrentCollectionId: setSelectedId } = useCurrentCollection()
+    const [errorMessage, setErrorMessage] = useState<string | null>(null)
+    const [savingDefault, setSavingDefault] = useState(false)
+    const [retryCount, setRetryCount] = useState(0)
+
+    // Load the collection list once per account or retry; the API helper puts the saved default first.
+    useEffect(() =>
+    {
+        let isCurrentRequest = true
+        const abortController = new AbortController()
+
+        async function loadCollections()
+        {
+            try
+            {
+                const accessToken = await getAccessTokenSilently({
+                    authorizationParams: { audience: apiAudience, scope: 'read:games' },
+                })
+                // The user may leave while Auth0 is preparing the token.
+                if (!isCurrentRequest)
+                {
+                    return
+                }
+
+                const loadedCollections = await fetchCollections(accessToken, abortController.signal)
+
+                if (isCurrentRequest)
+                {
+                    setCollections(loadedCollections)
+                    // Keep the shelf viewed before visiting Track; use the default for a fresh session or removed shelf.
+                    setSelectedId(currentId => loadedCollections.some(collection => collection.id === currentId)
+                        ? currentId : loadedCollections[0].id)
+                }
+            }
+            catch (error)
+            {
+                if (isCurrentRequest)
+                {
+                    setErrorMessage(error instanceof Error ? error.message : 'Could not load your collections.')
+                }
+            }
+        }
+        void loadCollections()
+
+        return () =>
+        {
+            // Cancel the old load and prevent its result from replacing a newer browsing session.
+            isCurrentRequest = false
+            abortController.abort()
+        }
+    }, [getAccessTokenSilently, retryCount, setSelectedId])
+
+    /** Saves the viewed collection as the default without moving it or changing the browsing order. */
+    async function makeDefault()
+    {
+        if (!selectedId || savingDefault)
+        {
+            return
+        }
+
+        setSavingDefault(true)
+        setErrorMessage(null)
+
+        try
+        {
+            const accessToken = await getAccessTokenSilently({
+                authorizationParams: { audience: apiAudience, scope: 'write:games' },
+            })
+            const savedDefault = await saveDefaultCollection(accessToken, selectedId)
+
+            // Update stars only after the server confirms the save; leave the list order unchanged.
+            setCollections(currentCollections => currentCollections.map(collection => ({
+                ...collection,
+                defaultCollection: collection.id === savedDefault.id,
+            })))
+        }
+        catch (error)
+        {
+            setErrorMessage(error instanceof Error ? error.message : 'Could not save your default collection.')
+        }
+        finally
+        {
+            setSavingDefault(false)
+        }
+    }
+
+    function retryLoadingCollections()
+    {
+        setErrorMessage(null)
+        setRetryCount(currentCount => currentCount + 1)
+    }
+
+    function selectCollection(collectionId: string)
+    {
+        setSelectedId(collectionId)
+        setErrorMessage(null)
+    }
+
+    const selectedCollection = collections.find(collection => collection.id === selectedId)
+
+    // Do not display a shelf until its collection is known; offer a retry if loading failed.
+    if (!selectedCollection)
+    {
+        return (
+            <AppLayout>
+                <section className="mx-auto max-w-6xl py-10" aria-busy={!errorMessage}>
+                    {errorMessage ? (
+                        <div className="alert alert-error" role="alert">
+                            <span>{errorMessage}</span>
+                            <button type="button" className="btn btn-sm" onClick={retryLoadingCollections}>
+                                Retry
+                            </button>
+                        </div>
+                    ) : <p role="status">Loading your collections...</p>}
+                </section>
+            </AppLayout>
+        )
+    }
+    // Account totals stay mounted above the shelf while a different collection resets only its own view.
+    return (
+        <AppLayout>
+            <section className="mx-auto max-w-6xl py-10 sm:py-7">
+                {collections.length > 1 && (
+                    <div className="mb-6">
+                        <CollectionStatistics title="All collections" />
+                    </div>
+                )}
+                <CollectionView
+                    key={selectedCollection.id}
+                    collections={collections}
+                    selected={selectedCollection}
+                    savingDefault={savingDefault}
+                    defaultError={errorMessage}
+                    onMakeDefault={makeDefault}
+                    onSelect={selectCollection}
+                />
+            </section>
+        </AppLayout>
+    )
+}
+
+type CollectionViewProps = {
+    collections: GameCollectionSummary[]
+    selected: GameCollectionSummary
+    savingDefault: boolean
+    defaultError: string | null
+    onMakeDefault: () => void
+    onSelect: (id: string) => void
+}
+
+/** A new view resets old games, pending loads, and forms before displaying another collection. */
+function CollectionView({ collections, selected, savingDefault, defaultError, onMakeDefault, onSelect }: CollectionViewProps)
+{
+    const { getAccessTokenSilently } = useAuth0()
     const [games, setGames] = useState<BoardGame[]>([])
     const [isLoading, setIsLoading] = useState(true)
+    const [hasLoadedGames, setHasLoadedGames] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
     const [isAddFormOpen, setIsAddFormOpen] = useState(false)
     const [editingGame, setEditingGame] = useState<BoardGame | null>(null)
@@ -41,7 +214,7 @@ function CollectionPage()
                 const accessToken = await getAccessTokenSilently({
                     authorizationParams: { audience: apiAudience, scope: 'read:games' },
                 })
-                const response = await fetch(`${apiBaseUrl}/api/games`, {
+                const response = await fetch(`${apiBaseUrl}/api/games?collectionId=${encodeURIComponent(selected.id)}`, {
                     headers: { Authorization: `Bearer ${accessToken}` },
                 })
 
@@ -51,7 +224,11 @@ function CollectionPage()
                 }
 
                 const results = await response.json() as BoardGame[]
-                if (isCurrent) setGames(results)
+                if (isCurrent)
+                {
+                    setGames(results)
+                    setHasLoadedGames(true)
+                }
             }
             catch (error)
             {
@@ -75,7 +252,7 @@ function CollectionPage()
             // Mark this page as inactive so the load request can finish safely in the background.
             isCurrent = false
         }
-    }, [getAccessTokenSilently])
+    }, [getAccessTokenSilently, selected.id])
 
     // Create or update a game; the backend assigns and verifies ownership from the validated token.
     async function handleSubmit(values: GameFormValues, coverImage: string | null)
@@ -90,7 +267,7 @@ function CollectionPage()
             const accessToken = await getAccessTokenSilently({authorizationParams: { audience: apiAudience, scope: 'write:games' }})
             const requestUrl = editingGame
                 ? `${apiBaseUrl}/api/games/${editingGame.id}`
-                : `${apiBaseUrl}/api/games`
+                : `${apiBaseUrl}/api/games?collectionId=${encodeURIComponent(selected.id)}`
 
             // Send the game details and cover photo (null removes it); Spring determines the owner from the validated token.
             const response = await fetch(
@@ -209,6 +386,19 @@ function CollectionPage()
     }
 
     const isFormOpen = isAddFormOpen || editingGame !== null
+    const navigationDisabled = isFormOpen || isSaving || deletingGameId !== null || savingDefault
+    const selectedIndex = collections.findIndex(collection => collection.id === selected.id)
+
+    function selectCollection(id: string)
+    {
+        if (!navigationDisabled && id !== selected.id) onSelect(id)
+    }
+
+    function swipeCollection(direction: 'next' | 'previous')
+    {
+        const nextIndex = selectedIndex + (direction === 'next' ? 1 : -1)
+        if (nextIndex >= 0 && nextIndex < collections.length) selectCollection(collections[nextIndex].id)
+    }
 
     // The navbar's "Add A Game!" option navigates here with an action in the router state.
     // Setting state while rendering (guarded by the handled key) is React's way to react to a changed value without an effect.
@@ -227,20 +417,34 @@ function CollectionPage()
     }, [navAction, navigate, location.pathname])
     // Render the form and the collection's loading, empty, error, and game-list states.
     return (
-        <AppLayout>
-            <section className="mx-auto max-w-6xl py-10 sm:py-7">
-                <ShelfBackground>
+        <>
+                <ShelfBackground key={selected.id} collectionId={selected.id} onSwipe={swipeCollection}
+                    navigationDisabled={navigationDisabled}
+                    navigation={<CollectionNavigation collections={collections} selected={selected}
+                        disabled={navigationDisabled} savingDefault={savingDefault}
+                        onSelect={selectCollection} onMakeDefault={onMakeDefault} />}>
                 <div className="flex flex-col justify-between gap-6 border-b border-base-300 pb-7 sm:flex-row sm:items-end">
-                    <div>
+                    <div className="min-w-0 pt-12">
                         <p className="mb-3 text-xs font-bold tracking-[0.16em] text-secondary">YOUR COLLECTION</p>
                         <h1 className="font-serif text-4xl leading-tight text-base-content sm:text-5xl">Game Shelf</h1>
+                        <p className="mt-2 break-words text-lg font-semibold" role="status" aria-live="polite">{selected.name}</p>
+                        {collections.length > 1 && (
+                            <>
+                                <p className="mt-2 text-xs text-base-content/70 sm:hidden">
+                                    {selectedIndex + 1} of {collections.length}. Swipe right for next, left for previous.
+                                </p>
+                                {isFormOpen && <p className="mt-2 text-xs">Save or cancel the form before changing collections.</p>}
+                            </>
+                        )}
                     </div>
                 </div>
                 </ShelfBackground>
 
-                {/* Start with fresh statistics when the signed-in account changes. */}
-                <CollectionStatistics key={user?.sub ?? 'signed-in-user'} games={games} />
+                {/* These answers belong only to the selected shelf and reset with its keyed view. */}
+                <CollectionStatistics collectionId={selected.id} games={games}
+                    title={collections.length > 1 ? 'This collection' : undefined} />
 
+                {defaultError && <p className="alert alert-error mt-5 text-sm" role="alert">{defaultError}</p>}
                 {errorMessage && (
                     <p className="alert alert-soft alert-error mt-5 text-sm in-data-[theme=boardgame-light]:border-[#e2b6a9] in-data-[theme=boardgame-light]:bg-[#f7e9e5] in-data-[theme=boardgame-light]:text-[#792c23]" role="alert">
                         {errorMessage}
@@ -271,6 +475,8 @@ function CollectionPage()
                         <p className="rounded-box border border-base-300 bg-base-100 px-4 py-6 text-sm text-base-content/70" role="status">
                             Loading your games...
                         </p>
+                    ) : !hasLoadedGames ? (
+                        <p className="mt-4 text-sm" role="status">Could not load this collection. Reload the page to try again.</p>
                     ) : games.length === 0 ? (
                         <div className="rounded-box border border-dashed border-base-300 bg-base-100 px-5 py-10 text-center">
                             <p className="font-serif text-2xl text-base-content">Your shelf is ready.</p>
@@ -294,8 +500,7 @@ function CollectionPage()
                         />
                     )}
                 </div>
-            </section>
-        </AppLayout>
+        </>
     )
 }
 

@@ -2,10 +2,9 @@ package com.SwampDragonInn.trackmyboardgames;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,18 +16,22 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.SwampDragonInn.trackmyboardgames.domain.AppUser;
 import com.SwampDragonInn.trackmyboardgames.domain.BoardGame;
 import com.SwampDragonInn.trackmyboardgames.domain.GamePlay;
-import com.SwampDragonInn.trackmyboardgames.domain.StatisticsSummary;
+import com.SwampDragonInn.trackmyboardgames.domain.CollectionStatisticsSummary;
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsProcessedEventRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.StatisticsSummaryRepository;
+import com.SwampDragonInn.trackmyboardgames.repository.StatisticsRefreshQueryRepository;
 import com.SwampDragonInn.trackmyboardgames.repository.AppUserRepository;
+import com.SwampDragonInn.trackmyboardgames.repository.CollectionStatisticsRepository;
+import com.SwampDragonInn.trackmyboardgames.repository.StatisticsHeatmapRepository;
 import com.SwampDragonInn.trackmyboardgames.service.StatisticsRefreshService;
+import com.SwampDragonInn.trackmyboardgames.service.UserProfileService;
 
 import jakarta.persistence.EntityManager;
 
@@ -41,10 +44,22 @@ class StatisticsRefreshTests
 	private StatisticsRefreshService service;
 
 	@Autowired
+	private UserProfileService profiles;
+
+	@Autowired
 	private AppUserRepository users;
 
-	@MockitoSpyBean
+	@Autowired
 	private StatisticsSummaryRepository summaries;
+
+	@Autowired
+	private CollectionStatisticsRepository collectionSummaries;
+
+	@Autowired
+	private StatisticsHeatmapRepository heatmaps;
+
+	@Autowired
+	private StatisticsRefreshQueryRepository refreshQueries;
 
 	@Autowired
 	private StatisticsProcessedEventRepository receipts;
@@ -82,7 +97,7 @@ class StatisticsRefreshTests
 	{
 		assertThat(this.service.refresh(event(), this.ownerId)).isTrue();
 
-		StatisticsSummary summary = summary();
+		CollectionStatisticsSummary summary = summary();
 		assertThat(summary.getCollectionSize()).isZero();
 		assertThat(summary.getMostPlayed()).isNull();
 		assertThat(summary.getMostRecentlyPlayed()).isNull();
@@ -104,7 +119,7 @@ class StatisticsRefreshTests
 
 		this.service.refresh(event(), this.ownerId);
 
-		StatisticsSummary summary = summary();
+		CollectionStatisticsSummary summary = summary();
 		assertThat(summary.getCollectionSize()).isEqualTo(3);
 		assertThat(summary.getMostPlayed().gameId()).isEqualTo(azul);
 		assertThat(summary.getMostPlayed().playCount()).isEqualTo(3);
@@ -126,7 +141,7 @@ class StatisticsRefreshTests
 
 		this.service.refresh(event(), this.ownerId);
 
-		StatisticsSummary summary = summary();
+		CollectionStatisticsSummary summary = summary();
 		assertThat(summary.getPlaysForMonth(YearMonth.of(2025, 12))).isEqualTo(1);
 		assertThat(summary.getPlaysForMonth(YearMonth.of(2026, 1))).isEqualTo(2);
 		assertThat(summary.getPlaysForMonth(YearMonth.of(2026, 2))).isEqualTo(1);
@@ -202,20 +217,32 @@ class StatisticsRefreshTests
 	void failureAfterSavingRollsBackBothSummaryAndReceipt()
 	{
 		UUID eventId = event();
-		game(this.ownerId, "Azul", "");
-		doAnswer(invocation ->
-		{
-			StatisticsSummary summary = invocation.getArgument(0);
-			this.entityManager.merge(summary);
-			this.entityManager.flush();
-			throw new IllegalStateException("Simulated failure after saving statistics");
-		}).when(this.summaries).saveAndFlush(any(StatisticsSummary.class));
+		UUID gameId = game(this.ownerId, "Azul", "");
+		play(gameId, "2026-10-21");
+		UUID collectionId = transaction().execute(status ->
+				this.entityManager.find(AppUser.class, this.ownerId).getDefaultCollection().getId());
 
-		assertThatThrownBy(() -> this.service.refresh(eventId, this.ownerId))
+		assertThatThrownBy(() -> transaction().executeWithoutResult(status ->
+		{
+			this.service.refresh(eventId, this.ownerId);
+			assertThat(summary().getCollectionSize()).isEqualTo(1);
+			assertThat(this.collectionSummaries.findByCollectionAndOwner(collectionId, this.ownerId)
+					.orElseThrow().getCollectionSize()).isEqualTo(1);
+			assertThat(this.receipts.findById(eventId)).isPresent();
+			assertThat(this.heatmaps.findSaved(this.ownerId, null).orElseThrow().dailyPlays()).containsEntry("2026-10-21", 1L);
+			assertThat(this.heatmaps.findSaved(this.ownerId, collectionId).orElseThrow().dailyPlays()).containsEntry("2026-10-21", 1L);
+			throw new IllegalStateException("Simulated failure after saving statistics");
+		}))
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessage("Simulated failure after saving statistics");
 		assertThat(this.summaries.findById(this.ownerId)).isEmpty();
+		assertThat(this.collectionSummaries.findByCollectionAndOwner(collectionId, this.ownerId)).isEmpty();
 		assertThat(this.receipts.findById(eventId)).isEmpty();
+		assertThat(this.heatmaps.findSaved(this.ownerId, null)).isEmpty();
+		assertThat(this.heatmaps.findSaved(this.ownerId, collectionId)).isEmpty();
+		assertThat(this.service.refresh(eventId, this.ownerId)).isTrue();
+		assertThat(this.collectionSummaries.findByCollectionAndOwner(collectionId, this.ownerId)
+				.orElseThrow().getCollectionSize()).isEqualTo(1);
 	}
 
 	@Test
@@ -261,16 +288,55 @@ class StatisticsRefreshTests
 	{
 		this.service.backfill(this.ownerId);
 		game(this.ownerId, "Azul", "");
-		doAnswer(invocation ->
+		assertThatThrownBy(() -> transaction().executeWithoutResult(status ->
 		{
-			this.entityManager.merge(invocation.getArgument(0, StatisticsSummary.class));
-			this.entityManager.flush();
+			this.service.backfill(this.ownerId);
+			assertThat(summary().getCollectionSize()).isEqualTo(1);
 			throw new IllegalStateException("Simulated backfill failure");
-		}).when(this.summaries).saveAndFlush(any(StatisticsSummary.class));
-
-		assertThatThrownBy(() -> this.service.backfill(this.ownerId))
+		}))
 				.isInstanceOf(IllegalStateException.class).hasMessage("Simulated backfill failure");
 		assertThat(summary().getCollectionSize()).isZero();
+	}
+
+	@Test
+	void procedureCallRequiresTheRefreshServicesTransaction()
+	{
+		assertThatThrownBy(() -> this.refreshQueries.refreshCollectionStatistics(this.ownerId, Instant.now()))
+				.isInstanceOf(IllegalTransactionStateException.class);
+		assertThat(this.summaries.findById(this.ownerId)).isEmpty();
+	}
+
+	@Test
+	void unplayedCollectionHasNoWinnersAndRepeatedDaysCountEveryPlay()
+	{
+		UUID gameId = game(this.ownerId, "Azul", "");
+		this.service.refresh(event(), this.ownerId);
+		assertThat(summary().getCollectionSize()).isEqualTo(1);
+		assertThat(summary().getMostPlayed()).isNull();
+		assertThat(summary().getMostRecentlyPlayed()).isNull();
+
+		play(gameId, "2026-10-21");
+		play(gameId, "2026-10-21");
+		UUID eventId = event();
+		this.service.refresh(eventId, this.ownerId);
+		assertThat(summary().getMostPlayed().playCount()).isEqualTo(2);
+		assertThat(summary().getPlaysForMonth(YearMonth.of(2026, 10))).isEqualTo(2);
+		assertThat(summary().getRefreshedAt()).isEqualTo(this.receipts.findById(eventId).orElseThrow().getProcessedAt());
+	}
+
+	@Test
+	void tiedGameNamesAndEditionsAreComparedIgnoringCase()
+	{
+		UUID upper = game(this.ownerId, "Zebra", "A");
+		UUID lower = game(this.ownerId, "azul", "a");
+		UUID laterEdition = game(this.ownerId, "Azul", "Z");
+		play(upper, "2026-10-21");
+		play(lower, "2026-10-21");
+		play(laterEdition, "2026-10-21");
+		this.service.refresh(event(), this.ownerId);
+
+		assertThat(summary().getMostPlayed().gameId()).isEqualTo(lower);
+		assertThat(summary().getMostRecentlyPlayed().gameId()).isEqualTo(lower);
 	}
 
 	@Test
@@ -305,8 +371,7 @@ class StatisticsRefreshTests
 	{
 		UUID id = transaction().execute(status ->
 		{
-			AppUser owner = new AppUser("https://example.test/", "statistics-" + UUID.randomUUID());
-			this.entityManager.persist(owner);
+			AppUser owner = this.profiles.findOrCreate("https://example.test/", "statistics-" + UUID.randomUUID());
 			return owner.getId();
 		});
 		this.owners.add(id);
@@ -342,7 +407,7 @@ class StatisticsRefreshTests
 		return id;
 	}
 
-	private StatisticsSummary summary()
+	private CollectionStatisticsSummary summary()
 	{
 		return this.summaries.findById(this.ownerId).orElseThrow();
 	}

@@ -1,11 +1,14 @@
 package com.SwampDragonInn.trackmyboardgames.api;
 
+import java.util.UUID;
+
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.SwampDragonInn.trackmyboardgames.service.StatisticsReadService;
@@ -25,16 +28,33 @@ public class StatisticsController
 		this.statistics = statistics;
 	}
 
+	/**
+	 * Reads the current month's saved daily counts for all collections or one chosen shelf.
+	 */
+	@GetMapping("/heatmap")
+	public ResponseEntity<MonthlyHeatmapResponse> heatmap(@AuthenticationPrincipal Jwt jwt,
+			@RequestParam(required = false) UUID collectionId)
+	{
+		String issuer = jwt.getIssuer().toString();
+		String subject = jwt.getSubject();
+		MonthlyHeatmapResponse savedHeatmap = this.statistics.readMonthlyHeatmap(issuer, subject, collectionId);
+
+		return ResponseEntity.ok()
+				.cacheControl(CacheControl.noStore())
+				.body(savedHeatmap);
+	}
+
 	// Handles the collection page's request for saved statistics.
 	@GetMapping
-	public ResponseEntity<StatisticsResponse> get(@AuthenticationPrincipal Jwt jwt)
+	public ResponseEntity<CollectionStatisticsResponse> get(@AuthenticationPrincipal Jwt jwt,
+			@RequestParam(required = false) UUID collectionId)
 	{
 		// The validated token identifies who issued the login and which user signed in.
 		String issuer = jwt.getIssuer().toString();
 		String subject = jwt.getSubject();
 
 		// Look up the statistics already saved for this user instead of calculating them again.
-		StatisticsResponse savedStatistics = this.statistics.read(issuer, subject);
+		CollectionStatisticsResponse savedStatistics = this.statistics.readCollectionStats(issuer, subject, collectionId);
 
 		// Send the statistics back to the page. Tell browsers and other caches not to save a copy,
 		// so future requests fetch the saved results again rather than reuse an old response.

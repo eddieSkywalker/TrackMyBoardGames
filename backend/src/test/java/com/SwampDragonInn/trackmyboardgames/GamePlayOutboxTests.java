@@ -28,6 +28,7 @@ import com.SwampDragonInn.trackmyboardgames.domain.BoardGame;
 import com.SwampDragonInn.trackmyboardgames.domain.OutboxEvent;
 import com.SwampDragonInn.trackmyboardgames.repository.OutboxEventRepository;
 import com.SwampDragonInn.trackmyboardgames.service.GamePlayService;
+import com.SwampDragonInn.trackmyboardgames.service.UserProfileService;
 
 import jakarta.persistence.EntityManager;
 import tools.jackson.databind.JsonNode;
@@ -42,6 +43,9 @@ class GamePlayOutboxTests
 
 	@Autowired
 	private GamePlayService service;
+
+	@Autowired
+	private UserProfileService profiles;
 
 	@MockitoSpyBean
 	private OutboxEventRepository outboxRepository;
@@ -65,8 +69,7 @@ class GamePlayOutboxTests
 		this.subject = "outbox-test-" + UUID.randomUUID();
 		new TransactionTemplate(this.transactionManager).executeWithoutResult(status ->
 		{
-			AppUser owner = new AppUser(ISSUER, this.subject);
-			this.entityManager.persist(owner);
+			AppUser owner = this.profiles.findOrCreate(ISSUER, this.subject);
 			BoardGame game = new BoardGame(owner, "Outbox test game", "", null, null, null, null, null);
 			this.entityManager.persist(game);
 			this.ownerId = owner.getId();

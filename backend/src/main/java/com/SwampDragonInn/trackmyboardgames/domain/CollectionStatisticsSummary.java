@@ -15,11 +15,15 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-// The saved answers for one user's four statistics cards. Game and play changes update these answers
-// in the background, so opening the page can show them without counting the full history again.
+/**
+ * Holds the saved answers shown by the statistics cards.
+ *
+ * <p>Game and play changes update these results in the background so reads do not recount the history.
+ * This entity maps the account-wide table. Collection reads reuse the same answer shape.
+ */
 @Entity
 @Table(name = "statistics_summaries")
-public class StatisticsSummary
+public class CollectionStatisticsSummary
 {
 
 	// The details shown for one game on the "most played" or "most recently played" card.
@@ -52,12 +56,12 @@ public class StatisticsSummary
 	private Instant refreshedAt;
 
 	// JPA uses this constructor when reading the saved cards.
-	protected StatisticsSummary()
+	protected CollectionStatisticsSummary()
 	{
 	}
 
 	// Builds the replacement answers after counting the owner's current games and plays.
-	public StatisticsSummary(UUID ownerId, long collectionSize, GameSummary mostPlayed,
+	public CollectionStatisticsSummary(UUID ownerId, long collectionSize, GameSummary mostPlayed,
 			GameSummary mostRecentlyPlayed, Map<String, Long> monthlyPlays, Instant refreshedAt)
 	{
 		this.ownerId = Objects.requireNonNull(ownerId, "Owner ID is required.");

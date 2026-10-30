@@ -1,5 +1,21 @@
 # React + TypeScript + Vite
 
+## Charts and license notices
+
+The Track navigation item opens the signed-in `/stats` page. This is currently
+a page shell; collection charts will be added separately.
+
+Apache ECharts is installed as `echarts` and includes TypeScript types. It can be
+used directly from React; no separate React wrapper or types package is required.
+See the [ECharts handbook](https://echarts.apache.org/handbook/en/basics/import/)
+for importing only the chart types and renderer needed by a component.
+
+Run `npm run build` for production. After Vite builds the app, the build copies
+the installed ECharts license and NOTICE, plus zrender and tslib license notices,
+into `dist/licenses`. Deploy the entire `dist` directory, including these files.
+The notices do not change this application's license or require a visible chart
+logo or footer credit. Review the copied files when upgrading these dependencies.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

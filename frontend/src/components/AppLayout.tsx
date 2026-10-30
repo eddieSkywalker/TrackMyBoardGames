@@ -107,29 +107,40 @@ function AppLayout({ children }: { children: ReactNode })
                 <div className="navbar-end hidden w-auto shrink-0 gap-1 sm:flex sm:gap-2">
                     {/* Create menu: a plus icon that opens Add A Play, Add A Game, and the nested Shelf Background options. */}
                     <div className="dropdown dropdown-end">
-                        <div className="btn btn-primary btn-sm btn-circle" tabIndex={0} role="button" aria-label="Open create menu">
+                        <div className="btn btn-ghost btn-sm text-primary" tabIndex={0} role="button" aria-label="Open create menu">
                             <svg className="size-5 fill-none stroke-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
                                 <path d="M12 5v14M5 12h14" />
                             </svg>
+                            Add
                         </div>
                         <ul className="menu dropdown-content z-10 mt-3 w-56 rounded-box bg-base-100 p-2 shadow" tabIndex={0}>
                             {createMenuItems()}
                         </ul>
                     </div>
-                    <label className="swap swap-rotate btn btn-ghost btn-sm btn-circle text-primary" title="Toggle dark mode">
-                        <input
-                            type="checkbox"
-                            aria-label="Dark mode"
-                            checked={theme === 'boardgame-dark'}
-                            onChange={event => setTheme(event.target.checked ? 'boardgame-dark' : 'boardgame-light')}
-                        />
-                        <svg className="swap-on size-5 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M9 21a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1H9v1Zm3-19a7 7 0 0 0-4 12.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26A7 7 0 0 0 12 2Z" />
+                    <NavLink
+                        to="/stats"
+                        onClick={closeMenu}
+                        className={({ isActive }) => `btn btn-ghost btn-sm text-primary${isActive ? ' btn-active' : ''}`}
+                    >
+                        <svg className="size-5 fill-none stroke-current" viewBox="0 0 24 24"
+                            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M12 3v9h9a9 9 0 1 1-9-9ZM15 3a9 9 0 0 1 6 6h-6Z" />
                         </svg>
-                        <svg className="swap-off size-5 fill-none stroke-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M9 21h6M10 18h4m-5.5-3.5a7 7 0 1 1 7 0c-.9.7-1.5 1.5-1.5 2.5h-4c0-1-.6-1.8-1.5-2.5Z" />
+                        Track
+                    </NavLink>
+                    <button
+                        type="button"
+                        className="btn btn-ghost btn-sm text-primary"
+                        aria-label="Toggle dark mode"
+                        aria-pressed={theme === 'boardgame-dark'}
+                        onClick={() => setTheme(theme === 'boardgame-dark' ? 'boardgame-light' : 'boardgame-dark')}
+                    >
+                        <svg className="size-5 fill-none stroke-current" viewBox="0 0 24 24"
+                            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M21 12.8A9 9 0 0 1 11.2 3 9 9 0 1 0 21 12.8Z" />
                         </svg>
-                    </label>
+                        Theme
+                    </button>
 
                     {/* Profile menu: a round avatar showing the first letter of the user's name; clicking it opens the dropdown. */}
                     <div className="dropdown dropdown-end">
@@ -166,6 +177,13 @@ function AppLayout({ children }: { children: ReactNode })
                         </ul>
                     )}
                 </div>
+                <NavLink to="/stats" onClick={closeMenu}>
+                    <svg className="size-6 fill-none stroke-current" viewBox="0 0 24 24"
+                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 3v9h9a9 9 0 1 1-9-9ZM15 3a9 9 0 0 1 6 6h-6Z" />
+                    </svg>
+                    <span className="dock-label">Track</span>
+                </NavLink>
                 <button type="button" aria-label="Toggle dark mode" aria-pressed={theme === 'boardgame-dark'} onClick={() => setTheme(theme === 'boardgame-dark' ? 'boardgame-light' : 'boardgame-dark')}>
                     <svg className="size-6 fill-none stroke-current" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M21 12.8A9 9 0 0 1 11.2 3 9 9 0 1 0 21 12.8Z" />

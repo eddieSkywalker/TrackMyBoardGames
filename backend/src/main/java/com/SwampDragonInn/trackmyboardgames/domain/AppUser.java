@@ -8,6 +8,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -31,6 +34,32 @@ public class AppUser
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "default_collection_id")
+	private GameCollection defaultCollection;
+
+	/**
+	 * Returns the saved starting/default collection, or null during initial profile setup.
+	 */
+	public GameCollection getDefaultCollection()
+	{
+		return this.defaultCollection;
+	}
+
+	/**
+	 * Sets the default only to a collection owned by this profile.
+	 *
+	 * @param collection an existing collection belonging to this user
+	 */
+	public void setDefaultCollection(GameCollection collection)
+	{
+		if (collection == null || !this.id.equals(collection.getOwner().getId()))
+		{
+			throw new IllegalArgumentException("The default collection must belong to this user.");
+		}
+		this.defaultCollection = collection;
+	}
 
 	protected AppUser()
 	{

@@ -2,6 +2,7 @@ package com.SwampDragonInn.trackmyboardgames.domain;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.Objects;
 
 import org.hibernate.annotations.DynamicUpdate;
 
@@ -17,7 +18,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
-// JPA model for a board game; each row belongs to one local app user through owner.
+// Each game belongs to one owner's collection.
 // DynamicUpdate makes saves write only the columns that changed, so editing a note does not resend the cover picture.
 @DynamicUpdate
 @Entity
@@ -32,6 +33,10 @@ public class BoardGame
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "owner_id", nullable = false)
 	private AppUser owner;
+
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "collection_id", nullable = false)
+	private GameCollection collection;
 
 	@Column(nullable = false, length = 200)
 	private String name;
@@ -75,7 +80,22 @@ public class BoardGame
 	public BoardGame(AppUser owner, String name, String edition, Integer minPlayers, Integer maxPlayers,
 			String bestPlayers, Integer playTimeMinutes, String notes)
 	{
+		this(owner, Objects.requireNonNull(owner.getDefaultCollection(), "The owner needs a starting collection."),
+				name, edition, minPlayers, maxPlayers, bestPlayers, playTimeMinutes, notes);
+	}
+
+	/**
+	 * Adds a game to the chosen owned collection without changing the user's saved default.
+	 */
+	public BoardGame(AppUser owner, GameCollection collection, String name, String edition, Integer minPlayers,
+			Integer maxPlayers, String bestPlayers, Integer playTimeMinutes, String notes)
+	{
+		if (!owner.getId().equals(collection.getOwner().getId()))
+		{
+			throw new IllegalArgumentException("The collection must belong to the game's owner.");
+		}
 		this.owner = owner;
+		this.collection = collection;
 		updateDetails(name, edition, minPlayers, maxPlayers, bestPlayers, playTimeMinutes, notes);
 	}
 
@@ -131,6 +151,11 @@ public class BoardGame
 	public AppUser getOwner()
 	{
 		return this.owner;
+	}
+
+	public GameCollection getCollection()
+	{
+		return this.collection;
 	}
 
 	public String getName()
