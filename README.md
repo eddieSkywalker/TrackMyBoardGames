@@ -476,14 +476,28 @@ Statistics are fetched when the collection page opens, with no statistics refres
 
 Remaining work: publisher batching and live end-to-end verification. Backfill and the receiver still need to be enabled deliberately in the intended development environment.
 
-Run the focused persistence tests against a disposable PostgreSQL database/schema with the usual database environment settings:
+Spring integration tests automatically use a fresh `tmbg_test_<random ID>` schema
+for each test application context. Flyway creates and migrates it; Spring removes
+it when that context closes. Tests never use the application's `DB_URL`, and live
+RabbitMQ workers and startup backfills are disabled during these tests.
+
+By default, tests connect to the local `trackmyboardgames` PostgreSQL database,
+using `DB_USERNAME` (default `postgres`) and `DB_PASSWORD`. The database must exist
+and the user must be allowed to create schemas. To choose another test database
+deliberately, set `TEST_DB_URL`, `TEST_DB_USERNAME`, and `TEST_DB_PASSWORD`.
+Use only a development/test server: schema isolation does not make production
+a suitable test server. An abruptly terminated JVM may leave a temporary schema
+behind; ordinary test completion, including assertion failures, closes contexts
+and removes their schemas.
+
+Run the focused persistence tests:
 
 ```powershell
 cd backend
 .\mvnw.cmd clean test '-Dtest=OutboxEventPersistenceTests,GamePlayOutboxTests,BoardGameOutboxTests,RabbitMqPublisherTests,OutboxDispatcherTests,StatisticsProcessedEventTests,StatisticsRefreshTests,StatisticsBackfillRunnerTests,StatisticsMessageConsumerTests,StatisticsConsumerIntegrationTests,StatisticsApiTests,GamePlayApiTests,BoardGameEditionTests'
 ```
 
-Flyway applies migrations before the tests and JPA validates the schema. Persistence/API test rows roll back; the outbox service tests exercise actual commits and clean up their own records. Migrations remain; do not point this command at production.
+Flyway applies migrations before the tests and JPA validates the schema. Persistence/API test rows roll back; the outbox service tests exercise actual commits and clean up their own records. This isolation also applies to the tests run by `.\mvnw.cmd clean package` and to Spring tests run in the IDE.
 
 ## Releases
 
